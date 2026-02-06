@@ -1,99 +1,147 @@
 """
 Lead Qualifier
-Analyzes conversations to classify leads as hot, warm, or cold.
+Analyzes conversations to classify leads - ONLY when explicit intent is detected.
 """
 
 import re
 import logging
-from typing import List, Dict, Literal
+from typing import List, Dict, Literal, Optional
 
 logger = logging.getLogger(__name__)
 
-LeadLevel = Literal["hot", "warm", "cold"]
+LeadLevel = Literal["hot", "warm", "cold", "none"]
 
 
 class LeadQualifier:
-    """Qualifies leads based on conversation analysis."""
+    """
+    Qualifies leads based on EXPLICIT business intent signals.
+    Does NOT trigger on casual conversation.
+    """
     
-    # Positive signals indicating interest
-    POSITIVE_SIGNALS = [
-        # Purchase intent
-        r'\b(buy|purchase|order|get|want to try|interested)\b',
-        r'\b(how much|price|cost|discount|offer)\b',
-        r'\b(sign up|register|subscribe|join)\b',
+    # EXPLICIT business intent signals (must be clear interest)
+    BUSINESS_INTENT_SIGNALS = [
+        # Pricing/Cost (clear buying intent)
+        r'\b(price|pricing|cost|how much|quote|rate|fee)s?\b',
+        r'\b(discount|offer|deal|package)s?\b',
         
-        # Engagement
-        r'\b(tell me more|explain|details|information)\b',
-        r'\b(sounds good|great|excellent|perfect|love it)\b',
-        r'\b(yes|yeah|sure|okay|definitely)\b',
+        # Demo/Trial (evaluation intent)
+        r'\b(demo|trial|free trial|test|try it|see it)(\s|$)',
+        r'\b(show me|walk me through|demonstrate)\b',
         
-        # Urgency
-        r'\b(today|now|soon|asap|immediately|urgent)\b',
-        r'\b(when can|how soon|available)\b',
+        # Features/Product (research intent)
+        r'\b(feature|capability|what can|does it|can it)\b',
+        r'\b(plan|tier|version|edition)s?\b',
         
-        # Decision making
-        r'\b(decide|thinking|consider|option)\b',
-        r'\b(compare|better|best)\b',
+        # Business help (marketing/growth intent)
+        r'\b(marketing help|grow my|business growth|get more)\b',
+        r'\b(lead generation|customer acquisition|sales help)\b',
+        
+        # Purchase signals
+        r'\b(buy|purchase|subscribe|sign up|get started)\b',
+        r'\b(interested in|want to know about|tell me about)\s+(your|the)\s+(product|service|solution)\b',
     ]
     
-    # Negative signals indicating disinterest
+    # Negative signals (disinterest)
     NEGATIVE_SIGNALS = [
-        r'\b(not interested|no thanks|dont want|don\'t need)\b',
-        r'\b(too expensive|cant afford|can\'t afford)\b',
-        r'\b(already have|using another|competitor)\b',
-        r'\b(stop calling|remove|unsubscribe)\b',
-        r'\b(busy|bad time|call later|not now)\b',
-        r'\b(hang up|goodbye|bye)\b',
+        r'\b(not interested|no thanks?|don\'?t want|don\'?t need)\b',
+        r'\b(too expensive|can\'?t afford|out of budget)\b',
+        r'\b(stop|remove|unsubscribe|don\'?t call)\b',
+        r'\b(already have|using another|happy with)\b',
+        r'\b(bye|goodbye|hang up|gotta go)\b',
     ]
     
-    # Question depth signals (more questions = more interest)
-    QUESTION_PATTERNS = [
-        r'\?',
-        r'\b(what|how|when|where|why|which|who)\b.*\?',
+    # CASUAL conversation (should NOT trigger lead scoring)
+    CASUAL_PATTERNS = [
+        r'^(hi|hello|hey|yo)(\s|$|!|\?)',
+        r'\b(how are you|what\'?s up|how\'?s it going)\b',
+        r'\b(good|fine|great|okay|alright)\s*(thanks?)?\b',
+        r'\b(what\'?s your name|who are you)\b',
+        r'\b(weather|time|day|today)\b',
+        r'\b(thanks?|thank you|cool|nice)\b',
     ]
     
     def __init__(self):
         """Initialize the lead qualifier."""
-        self._positive_regex = [
-            re.compile(p, re.IGNORECASE) for p in self.POSITIVE_SIGNALS
+        self._intent_regex = [
+            re.compile(p, re.IGNORECASE) for p in self.BUSINESS_INTENT_SIGNALS
         ]
         self._negative_regex = [
             re.compile(p, re.IGNORECASE) for p in self.NEGATIVE_SIGNALS
         ]
-        self._question_regex = [
-            re.compile(p, re.IGNORECASE) for p in self.QUESTION_PATTERNS
+        self._casual_regex = [
+            re.compile(p, re.IGNORECASE) for p in self.CASUAL_PATTERNS
         ]
+    
+    def is_casual_conversation(self, text: str) -> bool:
+        """Check if the text is casual conversation (not business intent)."""
+        text = text.strip().lower()
+        
+        # Short messages are usually casual
+        if len(text.split()) <= 3:
+            for pattern in self._casual_regex:
+                if pattern.search(text):
+                    return True
+        
+        return False
+    
+    def has_business_intent(self, text: str) -> bool:
+        """Check if user shows explicit business intent."""
+        for pattern in self._intent_regex:
+            if pattern.search(text):
+                return True
+        return False
     
     def extract_signals(self, text: str) -> List[str]:
         """
         Extract interest signals from text.
+        Only extracts signals if there's business intent.
         
         Args:
             text: Text to analyze
             
         Returns:
-            List of detected signal types
+            List of detected signal types (empty if casual conversation)
         """
+        # Skip casual conversation
+        if self.is_casual_conversation(text):
+            return []
+        
         signals = []
         
-        # Check positive signals
-        for pattern in self._positive_regex:
+        # Check business intent signals
+        for pattern in self._intent_regex:
             if pattern.search(text):
-                signals.append(f"positive:{pattern.pattern}")
+                signals.append(f"intent:{pattern.pattern[:30]}")
         
         # Check negative signals
         for pattern in self._negative_regex:
             if pattern.search(text):
-                signals.append(f"negative:{pattern.pattern}")
-        
-        # Check questions
-        question_count = sum(
-            len(pattern.findall(text)) for pattern in self._question_regex
-        )
-        if question_count > 0:
-            signals.append(f"questions:{question_count}")
+                signals.append(f"negative:{pattern.pattern[:30]}")
         
         return signals
+    
+    def should_qualify(self, transcript: List[str]) -> bool:
+        """
+        Determine if lead qualification should run.
+        Only qualifies if user has shown explicit business intent.
+        
+        Args:
+            transcript: List of conversation turns
+            
+        Returns:
+            True if qualification should run
+        """
+        # Need at least 2 user turns with business intent
+        user_turns = [t for t in transcript if t.startswith("User:")]
+        
+        intent_count = 0
+        for turn in user_turns:
+            text = turn.replace("User:", "").strip()
+            if self.has_business_intent(text):
+                intent_count += 1
+        
+        # Only qualify if there's clear intent (at least 1 explicit signal)
+        return intent_count >= 1
     
     def qualify_lead(
         self,
@@ -102,6 +150,7 @@ class LeadQualifier:
     ) -> Dict[str, any]:
         """
         Qualify a lead based on conversation signals.
+        Returns "none" if no business intent detected.
         
         Args:
             transcript: List of conversation turns
@@ -110,63 +159,65 @@ class LeadQualifier:
         Returns:
             Dict with qualification level and score
         """
-        positive_count = sum(1 for s in signals if s.startswith("positive:"))
+        # Check if we should even qualify
+        if not self.should_qualify(transcript):
+            logger.debug("No business intent detected - skipping qualification")
+            return {
+                "qualification": "none",
+                "score": 0.0,
+                "reason": "No explicit business intent detected"
+            }
+        
+        intent_count = sum(1 for s in signals if s.startswith("intent:"))
         negative_count = sum(1 for s in signals if s.startswith("negative:"))
-        question_count = sum(
-            int(s.split(":")[1]) for s in signals if s.startswith("questions:")
-        )
         
-        # Calculate base score
-        score = 0.5  # Start neutral
+        # Calculate score based on intent strength
+        score = 0.3  # Start low
         
-        # Positive signals boost score
-        score += positive_count * 0.1
+        # Each intent signal adds to score
+        score += intent_count * 0.15
         
         # Negative signals reduce score
-        score -= negative_count * 0.15
+        score -= negative_count * 0.2
         
-        # Questions indicate engagement (positive)
-        score += min(question_count * 0.05, 0.2)
-        
-        # Conversation length factor
+        # Conversation depth bonus (more engagement = more interest)
         user_turns = len([t for t in transcript if t.startswith("User:")])
-        if user_turns >= 5:
-            score += 0.1  # Longer engagement is positive
+        if user_turns >= 4:
+            score += 0.1
         
         # Clamp score
         score = max(0.0, min(1.0, score))
         
         # Determine qualification level
-        if score >= 0.7:
+        if negative_count > intent_count:
+            qualification = "cold"
+        elif score >= 0.6:
             qualification = "hot"
-        elif score >= 0.4:
+        elif score >= 0.35:
             qualification = "warm"
         else:
             qualification = "cold"
         
         logger.info(
             f"Lead qualified: {qualification} (score: {score:.2f}, "
-            f"+{positive_count}/-{negative_count}, {question_count} questions)"
+            f"intent: {intent_count}, negative: {negative_count})"
         )
         
         return {
             "qualification": qualification,
             "score": round(score, 2),
-            "positive_signals": positive_count,
+            "intent_signals": intent_count,
             "negative_signals": negative_count,
-            "question_count": question_count,
             "conversation_turns": user_turns
         }
     
-    def get_qualification_summary(
-        self,
-        qualification: LeadLevel
-    ) -> str:
+    def get_qualification_summary(self, qualification: LeadLevel) -> str:
         """Get a human-readable summary for a qualification level."""
         summaries = {
-            "hot": "High-intent lead showing strong purchase signals",
-            "warm": "Interested lead requiring nurturing",
-            "cold": "Low-interest lead, may need re-engagement later"
+            "hot": "Strong purchase intent - ready to convert",
+            "warm": "Showing interest - needs nurturing",
+            "cold": "Low interest - may re-engage later",
+            "none": "No business intent detected"
         }
         return summaries.get(qualification, "Unknown")
 

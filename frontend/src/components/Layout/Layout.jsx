@@ -7,12 +7,14 @@ import {
     BarChart3,
     Sparkles,
     Menu,
-    X
+    X,
+    Mic
 } from 'lucide-react'
 import { useState } from 'react'
 
 const navItems = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/voice-chat', label: 'Voice Chat', icon: Mic },
     { path: '/campaigns', label: 'Campaigns', icon: Megaphone },
     { path: '/calls', label: 'Calls', icon: Phone },
     { path: '/leads', label: 'Leads', icon: Users },

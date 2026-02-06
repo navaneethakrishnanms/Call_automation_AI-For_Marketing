@@ -10,7 +10,7 @@ from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.api.routes import campaigns, calls, leads, analytics, webhooks, test
+from app.api.routes import campaigns, calls, leads, analytics, webhooks, test, voice_chat
 
 # Configure logging
 logging.basicConfig(
@@ -84,6 +84,7 @@ app.include_router(calls.router, prefix="/api")
 app.include_router(leads.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
 app.include_router(webhooks.router, prefix="/api")
+app.include_router(voice_chat.router, prefix="/api")  # PRIMARY: Voice chatbot interface
 
 
 @app.get("/")
@@ -143,6 +144,7 @@ async def twilio_voice():
     Main voice webhook - called when a call comes in.
     Uses TTS normalizer and SSML for natural pronunciation.
     """
+    print("🔥 TWILIO HIT MY BACKEND")
     from app.utils.tts_normalizer import normalize_for_speech
     
     # Campaign name - this would come from database in production

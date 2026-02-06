@@ -1,141 +1,166 @@
 """
 TTS Text Normalization Layer
-============================
-Converts formal text into natural spoken language for TTS engines.
-
-This module solves the problem of TTS engines spelling out long,
-uncommon proper nouns character-by-character instead of pronouncing
-them naturally.
-
-Heuristics Used:
-1. Break long formal names with commas for natural pauses
-2. Add contextual phrases ("a company", "an institute") for clarity
-3. Remove legal suffixes that sound robotic (Pvt Ltd, LLC, etc.)
-4. Normalize ALL-CAPS to title case
-5. Add soft introductions for long proper nouns
-6. Preserve common conversational phrases unchanged
+Cleans text for natural-sounding voice output.
+Removes filler phrases, excessive punctuation, and marketing CTAs.
 """
 
 import re
 from typing import Optional
 
+
 # ============================================================================
-# PATTERNS FOR DETECTION
+# FILLER PHRASES TO REMOVE
 # ============================================================================
 
-# Legal/formal suffixes that sound robotic when spoken
+FILLER_PHRASES = [
+    # Corporate speak
+    r'\bI\'m happy to help\b',
+    r'\bI\'d be happy to\b',
+    r'\bI would be glad to\b',
+    r'\bIs there anything else I can help you with\??\b',
+    r'\bIs there anything else\??\b',
+    r'\bFeel free to\b',
+    r'\bDon\'t hesitate to\b',
+    r'\bPlease don\'t hesitate\b',
+    r'\bI hope this helps\b',
+    r'\bLet me know if you have any questions\b',
+    r'\bLet me know if you need anything else\b',
+    
+    # AI/Bot self-references
+    r'\bAs an AI\b',
+    r'\bAs a language model\b',
+    r'\bAs an assistant\b',
+    r'\bI\'m just an AI\b',
+    r'\bI don\'t have feelings\b',
+    
+    # Overly formal
+    r'\bI understand your concern\b',
+    r'\bI appreciate your patience\b',
+    r'\bThank you for your question\b',
+    r'\bThat\'s a great question\b',
+    r'\bAbsolutely!\s*',
+    r'\bCertainly!\s*',
+    
+    # Marketing CTAs (unless user asks)
+    r'\bSchedule a demo\b',
+    r'\bBook a call\b',
+    r'\bSign up today\b',
+    r'\bGet started now\b',
+    r'\bContact us at\b',
+    r'\bVisit our website\b',
+]
+
+# ============================================================================
+# PUNCTUATION CLEANUP
+# ============================================================================
+
+def _clean_punctuation(text: str) -> str:
+    """Remove excessive punctuation for natural speech."""
+    # Multiple exclamation/question marks
+    text = re.sub(r'!{2,}', '!', text)
+    text = re.sub(r'\?{2,}', '?', text)
+    
+    # Ellipsis cleanup (keep max one)
+    text = re.sub(r'\.{4,}', '...', text)
+    
+    # Remove asterisks (markdown bold)
+    text = re.sub(r'\*+', '', text)
+    
+    # Remove underscores (markdown italic)
+    text = re.sub(r'_+', '', text)
+    
+    # Remove hashtags
+    text = re.sub(r'#\w+', '', text)
+    
+    # Remove bullet points
+    text = re.sub(r'^[\s]*[-•*]\s*', '', text, flags=re.MULTILINE)
+    
+    # Remove numbered lists
+    text = re.sub(r'^[\s]*\d+[\.\)]\s*', '', text, flags=re.MULTILINE)
+    
+    return text
+
+
+# ============================================================================
+# ABBREVIATION EXPANSION
+# ============================================================================
+
+ABBREVIATIONS = {
+    r'\bbtw\b': 'by the way',
+    r'\bw/': 'with',
+    r'\bw/o\b': 'without',
+    r'\b&\b': 'and',
+    r'\betc\.?': 'etcetera',
+    r'\be\.g\.': 'for example',
+    r'\bi\.e\.': 'that is',
+    r'\basap\b': 'as soon as possible',
+    r'\binfo\b': 'information',
+}
+
+
+def _expand_abbreviations(text: str) -> str:
+    """Expand common abbreviations for natural speech."""
+    for abbrev, expansion in ABBREVIATIONS.items():
+        text = re.sub(abbrev, expansion, text, flags=re.IGNORECASE)
+    return text
+
+
+# ============================================================================
+# LEGAL SUFFIXES (sound robotic)
+# ============================================================================
+
 LEGAL_SUFFIXES = [
     r'\b(Private|Pvt\.?)\s*(Limited|Ltd\.?)\b',
     r'\bLLC\b',
     r'\bLLP\b',
     r'\bInc\.?\b',
     r'\bCorp(oration)?\.?\b',
-    r'\bCo\.?\b',
     r'\bPLC\b',
-    r'\b(Registered|Regd\.?)\b',
 ]
 
-# Institution keywords that help identify formal names
-INSTITUTION_KEYWORDS = [
-    'institute', 'university', 'college', 'school', 
-    'academy', 'foundation', 'centre', 'center',
-    'hospital', 'medical', 'polytechnic'
-]
 
-# Business keywords 
-BUSINESS_KEYWORDS = [
-    'solutions', 'services', 'systems', 'technologies',
-    'enterprises', 'industries', 'manufacturing', 'automation',
-    'consulting', 'analytics', 'ventures', 'labs'
-]
-
-# Common conversational words that should NOT be modified
-COMMON_WORDS = {
-    'marketing', 'ai', 'hello', 'welcome', 'thank', 'help',
-    'today', 'call', 'about', 'regarding', 'from', 'with'
-}
-
-
-# ============================================================================
-# CORE NORMALIZATION FUNCTION
-# ============================================================================
-
-def prepare_text_for_tts(
-    text: str,
-    add_context: bool = True,
-    max_name_words: int = 6
-) -> str:
-    """
-    Prepare text for TTS to sound natural and human-like.
-    
-    This function applies heuristics to make formal/proper nouns
-    sound conversational instead of robotic.
-    
-    Args:
-        text: Input text (can be any campaign name, greeting, etc.)
-        add_context: Whether to add contextual phrases for long names
-        max_name_words: Names longer than this get special treatment
-    
-    Returns:
-        Normalized text optimized for natural TTS pronunciation
-    
-    Examples:
-        >>> prepare_text_for_tts("Bannari Amman Institute of Technology")
-        "Bannari Amman Institute of Technology, an educational institute"
-        
-        >>> prepare_text_for_tts("XYZ Advanced Manufacturing Solutions Private Limited")
-        "XYZ Advanced Manufacturing Solutions, a technology company"
-    """
-    if not text or not text.strip():
-        return text
-    
-    # Step 1: Normalize ALL-CAPS to Title Case (prevents spelling out)
-    text = _normalize_caps(text)
-    
-    # Step 2: Remove legal suffixes that sound robotic
-    text = _remove_legal_suffixes(text)
-    
-    # Step 3: Add breathing pauses for long proper nouns
-    text = _add_natural_pauses(text, max_name_words)
-    
-    # Step 4: Add contextual phrases if the name is formal
-    if add_context:
-        text = _add_contextual_phrase(text)
-    
-    # Step 5: Clean up extra whitespace
-    text = re.sub(r'\s+', ' ', text).strip()
-    
+def _remove_legal_suffixes(text: str) -> str:
+    """Remove legal suffixes that sound robotic."""
+    for pattern in LEGAL_SUFFIXES:
+        text = re.sub(pattern, '', text, flags=re.IGNORECASE)
+    text = re.sub(r'[,\s]+$', '', text)
     return text
 
 
 # ============================================================================
-# HELPER FUNCTIONS
+# NUMBER FORMATTING
 # ============================================================================
 
+def _format_numbers(text: str) -> str:
+    """Format numbers for natural spoken output."""
+    # Phone numbers: add pauses
+    def format_phone(match):
+        number = match.group(1)
+        if len(number) == 10:
+            return f"{number[:3]}, {number[3:6]}, {number[6:]}"
+        return number
+    
+    text = re.sub(r'\b(\d{10,})\b', format_phone, text)
+    return text
+
+
+# ============================================================================
+# CAPS NORMALIZATION
+# ============================================================================
+
+PRESERVE_ACRONYMS = {'AI', 'IT', 'HR', 'CEO', 'CTO', 'USA', 'UK', 'EU', 'IIT', 'IIM', 'FAQ'}
+
+
 def _normalize_caps(text: str) -> str:
-    """
-    Convert ALL-CAPS words to Title Case.
-    
-    TTS engines often spell out ALL-CAPS words letter by letter.
-    Example: "ABC COMPANY" -> "Abc Company"
-    
-    Preserves common acronyms like AI, IT, HR, etc.
-    """
-    # Common acronyms to preserve
-    preserve_acronyms = {'AI', 'IT', 'HR', 'CEO', 'CTO', 'USA', 'UK', 'EU', 'IIT', 'IIM', 'NIT'}
-    
+    """Convert ALL-CAPS to Title Case (prevents TTS spelling out)."""
     words = text.split()
     result = []
     
     for word in words:
-        # Strip punctuation for checking
         clean_word = re.sub(r'[^\w]', '', word)
-        
-        if clean_word.upper() in preserve_acronyms:
-            # Keep known acronyms as-is
+        if clean_word.upper() in PRESERVE_ACRONYMS:
             result.append(word)
         elif clean_word.isupper() and len(clean_word) > 2:
-            # Convert ALL-CAPS words (except short ones) to Title Case
             result.append(word.title())
         else:
             result.append(word)
@@ -143,177 +168,90 @@ def _normalize_caps(text: str) -> str:
     return ' '.join(result)
 
 
-def _remove_legal_suffixes(text: str) -> str:
+# ============================================================================
+# MAIN NORMALIZATION FUNCTIONS
+# ============================================================================
+
+def clean_for_voice(text: str) -> str:
     """
-    Remove legal/formal suffixes that sound robotic when spoken.
+    Clean text for natural voice output.
+    Removes filler phrases, excessive punctuation, and marketing speak.
     
-    Example: "ABC Solutions Private Limited" -> "ABC Solutions"
+    Args:
+        text: Raw text from LLM
+        
+    Returns:
+        Clean text optimized for TTS
     """
-    for pattern in LEGAL_SUFFIXES:
+    if not text or not text.strip():
+        return text
+    
+    # Step 1: Remove filler phrases
+    for pattern in FILLER_PHRASES:
         text = re.sub(pattern, '', text, flags=re.IGNORECASE)
     
-    # Clean up trailing commas or periods
-    text = re.sub(r'[,\s]+$', '', text)
+    # Step 2: Clean punctuation
+    text = _clean_punctuation(text)
+    
+    # Step 3: Expand abbreviations
+    text = _expand_abbreviations(text)
+    
+    # Step 4: Normalize caps
+    text = _normalize_caps(text)
+    
+    # Step 5: Clean up whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+    text = re.sub(r'\s+([,\.\?\!])', r'\1', text)
+    
+    # Step 6: Remove empty sentences
+    text = re.sub(r'\.\s*\.', '.', text)
     
     return text
 
 
-def _add_natural_pauses(text: str, max_words: int = 6) -> str:
+def normalize_for_speech(text: str) -> str:
     """
-    Add commas to create natural breathing pauses in long names.
+    Full text normalization for TTS.
+    Main function to use before sending to TTS engine.
     
-    Long proper nouns without pauses sound rushed and robotic.
-    Adding a comma after the main name creates a natural breath.
-    
-    Example: "Bannari Amman Institute of Technology located in Tamil Nadu"
-          -> "Bannari Amman Institute of Technology, located in Tamil Nadu"
-    """
-    words = text.split()
-    
-    # Only process if it's a long formal name without existing pauses
-    if len(words) > max_words and ',' not in text:
-        # Find a good break point (after "of", "for", "and", or institution keyword)
-        break_after = ['of', 'for', 'and', 'in']
+    Args:
+        text: Any text to be spoken
         
-        for i, word in enumerate(words):
-            lower_word = word.lower().rstrip('.,')
-            
-            # Check for institution/business keywords
-            if lower_word in INSTITUTION_KEYWORDS or lower_word in BUSINESS_KEYWORDS:
-                # Add comma after the keyword + next word if exists
-                if i + 1 < len(words) and i + 1 >= 3:
-                    words[i] = word.rstrip(',') + ','
-                    break
-            
-            # Check for connecting words as break points
-            if lower_word in break_after and i > 2:
-                if i + 1 < len(words):
-                    # Add comma after the next word
-                    j = i + 1
-                    words[j] = words[j].rstrip(',') + ','
-                    break
-    
-    return ' '.join(words)
-
-
-def _add_contextual_phrase(text: str) -> str:
+    Returns:
+        Normalized text for natural speech
     """
-    Add contextual phrases to help TTS understand the type of entity.
-    
-    This helps the TTS pronounce names more naturally by providing
-    context about what kind of entity it is.
-    
-    Example: "Bannari Amman Institute of Technology"
-          -> "Bannari Amman Institute of Technology, an educational institute"
-    """
-    text_lower = text.lower()
-    
-    # Check if it's already conversational (has common words)
-    common_word_count = sum(1 for word in COMMON_WORDS if word in text_lower)
-    if common_word_count >= 2:
-        # Already sounds conversational, don't modify
-        return text
-    
-    # Check if context is already present
-    has_context = any(phrase in text_lower for phrase in [
-        'a company', 'an institute', 'a college', 'regarding',
-        'about', 'called', 'known as'
-    ])
-    if has_context:
-        return text
-    
-    # Detect entity type and add appropriate context
-    if any(kw in text_lower for kw in ['institute', 'university', 'college', 'school', 'academy']):
-        if not text.rstrip().endswith(','):
-            text = text.rstrip() + ','
-        text += ' an educational institute'
-    
-    elif any(kw in text_lower for kw in ['hospital', 'medical', 'clinic', 'healthcare']):
-        if not text.rstrip().endswith(','):
-            text = text.rstrip() + ','
-        text += ' a healthcare organization'
-    
-    elif any(kw in text_lower for kw in BUSINESS_KEYWORDS):
-        if not text.rstrip().endswith(','):
-            text = text.rstrip() + ','
-        text += ' a technology company'
-    
-    # For very long names without identifiable keywords, add a soft intro
-    elif len(text.split()) > 5:
-        # Could be a product or brand name
-        if not text.rstrip().endswith(','):
-            text = text.rstrip() + ','
-        text += ' a leading organization'
-    
+    text = clean_for_voice(text)
+    text = _format_numbers(text)
+    text = _remove_legal_suffixes(text)
     return text
 
 
-# ============================================================================
-# SENTENCE-LEVEL NORMALIZATION
-# ============================================================================
+def prepare_text_for_tts(
+    text: str,
+    add_context: bool = False,
+    max_name_words: int = 6
+) -> str:
+    """
+    Prepare text for TTS (legacy function for compatibility).
+    
+    Args:
+        text: Input text
+        add_context: Whether to add contextual phrases (disabled by default now)
+        max_name_words: Unused (kept for compatibility)
+    
+    Returns:
+        Normalized text for TTS
+    """
+    return normalize_for_speech(text)
+
 
 def normalize_greeting(
     campaign_name: str,
     greeting_template: str = "Hello! I'm calling from {name}."
 ) -> str:
-    """
-    Generate a natural-sounding greeting for any campaign.
-    
-    Args:
-        campaign_name: The name of the campaign/company
-        greeting_template: Template with {name} placeholder
-    
-    Returns:
-        Natural greeting ready for TTS
-    
-    Example:
-        >>> normalize_greeting("Bannari Amman Institute of Technology")
-        "Hello! I'm calling from Bannari Amman Institute of Technology, an educational institute."
-    """
-    normalized_name = prepare_text_for_tts(campaign_name)
+    """Generate a natural greeting."""
+    normalized_name = normalize_for_speech(campaign_name)
     return greeting_template.format(name=normalized_name)
-
-
-def normalize_for_speech(text: str) -> str:
-    """
-    Full text normalization for any speech content.
-    
-    This is the main function to use for all TTS content.
-    It handles greetings, campaign names, and general text.
-    
-    Args:
-        text: Any text that will be spoken via TTS
-    
-    Returns:
-        Normalized text optimized for natural speech
-    """
-    # Handle numbers that might be spelled out
-    text = _normalize_numbers(text)
-    
-    # Handle the main text
-    text = prepare_text_for_tts(text)
-    
-    return text
-
-
-def _normalize_numbers(text: str) -> str:
-    """
-    Ensure numbers are formatted for natural speech.
-    
-    Example: "Call us at 1800123456" -> "Call us at 1 8 0 0, 1 2 3 4 5 6"
-    """
-    # Phone numbers: add spaces for digit-by-digit reading
-    def format_phone(match):
-        number = match.group(1)
-        # Group digits for natural reading
-        if len(number) == 10:
-            return f"{number[:3]}, {number[3:6]}, {number[6:]}"
-        return ', '.join(number[i:i+3] for i in range(0, len(number), 3))
-    
-    # Match phone-like numbers (10+ digits)
-    text = re.sub(r'\b(\d{10,})\b', format_phone, text)
-    
-    return text
 
 
 # ============================================================================
@@ -321,32 +259,19 @@ def _normalize_numbers(text: str) -> str:
 # ============================================================================
 
 if __name__ == "__main__":
-    # Test cases
     test_inputs = [
-        "Bannari Amman Institute of Technology",
-        "XYZ Advanced Manufacturing Solutions Private Limited",
-        "ABC Super Premium Smart Home Automation System",
-        "NATIONAL INSTITUTE OF TECHNOLOGY",
-        "Hello! Welcome to Marketing AI",
-        "IIT Madras Research Foundation",
-        "Acme Corp Technologies LLC",
-        "Dr. John's Advanced Healthcare Solutions Private Limited",
+        "Absolutely! I'd be happy to help you with that. Is there anything else I can help you with?",
+        "That's a great question! Let me explain. The price is $99/month. Feel free to reach out if you have more questions!",
+        "Sure! Here's what you need to know:\n- First point\n- Second point\n- Third point",
+        "**Bold text** and *italic text* should be cleaned.",
+        "Contact XYZ Solutions Private Limited for more info!!!",
     ]
     
     print("=" * 60)
-    print("TTS TEXT NORMALIZATION EXAMPLES")
+    print("TTS VOICE CLEANUP EXAMPLES")
     print("=" * 60)
     
     for text in test_inputs:
-        normalized = prepare_text_for_tts(text)
-        print(f"\nInput:  {text}")
-        print(f"Output: {normalized}")
-    
-    print("\n" + "=" * 60)
-    print("GREETING EXAMPLES")
-    print("=" * 60)
-    
-    for name in test_inputs[:3]:
-        greeting = normalize_greeting(name)
-        print(f"\nCampaign: {name}")
-        print(f"Greeting: {greeting}")
+        cleaned = normalize_for_speech(text)
+        print(f"\nInput:  {text[:60]}...")
+        print(f"Output: {cleaned}")

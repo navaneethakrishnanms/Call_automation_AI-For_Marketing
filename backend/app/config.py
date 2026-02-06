@@ -22,16 +22,12 @@ class Settings(BaseSettings):
     # Groq (for Whisper STT)
     groq_api_key: str = ""
     
-    # ElevenLabs (English TTS)
-    elevenlabs_api_key: str = ""
-    elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"  # Default voice
-    
-    # Sarvam AI (Tamil TTS)
+    # Sarvam AI (TTS for all languages)
     sarvam_api_key: str = ""
     
     # Ollama (Local LLM)
     ollama_host: str = "http://localhost:11434"
-    ollama_model: str = "mistral:7b-instruct"
+    ollama_model: str = "llama3.1:8b"
     
     # Application
     debug: bool = True

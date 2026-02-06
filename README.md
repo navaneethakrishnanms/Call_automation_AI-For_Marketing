@@ -1,69 +1,111 @@
-# Marketing AI - Call Automation Platform
+# Marketing AI - Voice Chatbot & Call Automation Platform
 
-An AI-powered call automation platform for marketing with multilingual support (English, Tamil, and Tanglish).
+An AI-powered voice chatbot for marketing with multilingual capabilities (English, Tamil, and Tanglish).
 
 ## 🚀 Features
 
-- **Multilingual Support**: Automatic language detection for English, Tamil, and Tanglish
-- **AI-Powered Conversations**: Natural, friendly responses using Mistral-7B via Ollama
-- **FAQ Retrieval**: Semantic search with Sentence-Transformers + FAISS
-- **Lead Qualification**: Automatic hot/warm/cold lead scoring
-- **Speech Processing**: Whisper for STT, ElevenLabs & Sarvam AI for TTS
-- **Telephony Integration**: Twilio for voice calls
-- **Analytics Dashboard**: Real-time call and lead analytics
+- **Voice AI Chatbot**: Browser-based voice interaction
+- **Multilingual Support**: English, Tamil, and Tanglish
+- **AI-Powered Conversations**: Natural responses using Llama 3.1 8B
+- **FAQ Retrieval**: Semantic search with FAISS
+- **Lead Qualification**: Automatic hot/warm/cold scoring
+- **Call Automation**: Twilio integration (optional)
 
-## 📋 Prerequisites
+## 🤖 AI Stack
 
-- Docker & Docker Compose
-- Node.js 20+ (for local development)
-- Python 3.10+ (for local development)
-- Ollama with Mistral-7B model (for LLM)
+| Component | Model | Provider |
+|-----------|-------|----------|
+| **STT** | Whisper Large v3 Turbo | Groq API |
+| **Embeddings** | all-MiniLM-L6-v2 | Sentence-Transformers |
+| **LLM** | Llama 3.1 8B | Ollama (local) |
+| **TTS** | Bulbul v3 (kavitha) | Sarvam AI |
 
-## 🔧 Environment Setup
+## 🎯 System Workflow
 
-1. Copy the example environment file:
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 VOICE CHATBOT PIPELINE                       │
+└─────────────────────────────────────────────────────────────┘
+
+  User Speaks (Microphone)
+       │
+       ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │  1. SPEECH-TO-TEXT                                      │
+  │     Model: Whisper Large v3 Turbo (Groq)                │
+  │     Features: 30s timeout, retry, debounce (<500ms)     │
+  └─────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │  2. LANGUAGE DETECTION                                  │
+  │     Languages: English | Tamil | Tanglish               │
+  └─────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │  3. FAQ RETRIEVAL (RAG)                                 │
+  │     Embedding: all-MiniLM-L6-v2                         │
+  │     Vector DB: FAISS                                    │
+  └─────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │  4. LLM RESPONSE                                        │
+  │     Model: Llama 3.1 8B (Ollama)                        │
+  │     Output: 1-2 sentences, conversational               │
+  └─────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │  5. LEAD QUALIFICATION                                  │
+  │     Scores: Hot | Warm | Cold                           │
+  └─────────────────────────────────────────────────────────┘
+       │
+       ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │  6. TEXT-TO-SPEECH                                      │
+  │     Model: Bulbul v3 (Sarvam AI)                        │
+  │     Speaker: kavitha                                    │
+  └─────────────────────────────────────────────────────────┘
+       │
+       ▼
+  User Hears Response (Audio)
+```
+
+## 🔧 Setup
+
+### 1. Environment Variables
+
 ```bash
 cp backend/.env.example backend/.env
 ```
 
-2. Configure your API keys in `backend/.env`:
+Edit `backend/.env`:
 ```env
-# Twilio
-TWILIO_ACCOUNT_SID=your_account_sid
-TWILIO_AUTH_TOKEN=your_auth_token
-TWILIO_PHONE_NUMBER=+1234567890
-
-# AI Services
-GROQ_API_KEY=your_groq_api_key        # For Whisper Large v3 Turbo STT
-ELEVENLABS_API_KEY=your_elevenlabs_key  # English TTS
-SARVAM_API_KEY=your_sarvam_key          # Tamil TTS
-
-# Ollama (local LLM)
+GROQ_API_KEY=your_groq_key
+SARVAM_API_KEY=your_sarvam_key
 OLLAMA_HOST=http://localhost:11434
-OLLAMA_MODEL=mistral:7b-instruct
+OLLAMA_MODEL=llama3.1:8b
 ```
 
-3. Pull the Ollama model:
+### 2. Pull Ollama Model
+
 ```bash
-ollama pull mistral:7b-instruct
+ollama pull llama3.1:8b
 ```
 
-## 🐳 Running with Docker
+### 3. Run with Docker
 
-### Start All Services
 ```bash
 docker-compose up --build
 ```
 
-### Access Points
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
+### 4. Access
 
-### Stop Services
-```bash
-docker-compose down
-```
+- **Frontend**: http://localhost:3000
+- **Backend**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
 
 ## 💻 Local Development
 
@@ -71,7 +113,7 @@ docker-compose down
 ```bash
 cd backend
 python -m venv venv
-venv\Scripts\activate  # Windows
+venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
@@ -89,68 +131,31 @@ npm run dev
 Marketing_AI/
 ├── backend/
 │   ├── app/
-│   │   ├── api/routes/       # REST endpoints
-│   │   ├── models/           # SQLAlchemy models
-│   │   ├── schemas/          # Pydantic schemas
-│   │   ├── services/         # AI services
-│   │   │   ├── call_orchestrator.py   # Main call flow
-│   │   │   ├── language_detector.py   # Language detection
-│   │   │   ├── faq_retrieval.py       # FAISS retrieval
-│   │   │   ├── llm_service.py         # Mistral via Ollama
-│   │   │   ├── stt_service.py         # Whisper STT
-│   │   │   ├── tts_service.py         # ElevenLabs/Sarvam TTS
-│   │   │   └── lead_qualifier.py      # Lead scoring
+│   │   ├── api/routes/
+│   │   ├── services/
+│   │   │   ├── stt_service.py      # Whisper STT
+│   │   │   ├── llm_service.py      # Llama 3.1 8B
+│   │   │   ├── tts_service.py      # Sarvam TTS
+│   │   │   ├── faq_retrieval.py    # FAISS RAG
+│   │   │   └── lead_qualifier.py   # Lead scoring
 │   │   └── main.py
-│   ├── faqs/                 # Campaign FAQs
-│   ├── Dockerfile
-│   └── requirements.txt
+│   └── faqs/
 ├── frontend/
-│   ├── src/
-│   │   ├── pages/            # React pages
-│   │   ├── components/       # UI components
-│   │   └── api/              # API client
-│   ├── Dockerfile
-│   └── package.json
-├── docker-compose.yml
-└── README.md
+│   └── src/
+│       └── pages/
+│           └── VoiceChatPage.jsx   # Voice UI
+└── docker-compose.yml
 ```
 
 ## 🔌 API Endpoints
 
 | Endpoint | Description |
 |----------|-------------|
-| `GET /api/campaigns` | List all campaigns |
-| `POST /api/campaigns` | Create a campaign |
-| `GET /api/calls` | List call history |
-| `POST /api/calls/initiate` | Start outbound call |
+| `POST /api/voice/chat/audio` | Voice chat (audio input) |
+| `POST /api/voice/chat/text` | Text chat |
+| `GET /api/campaigns` | List campaigns |
 | `GET /api/leads` | List leads |
 | `GET /api/analytics/overview` | Dashboard stats |
-| `POST /api/webhooks/twilio/voice` | Twilio webhook |
-
-## 🎯 Call Flow
-
-```
-Incoming Call → Twilio Webhook
-     ↓
-Speech Recognition (Whisper)
-     ↓
-Language Detection (English/Tamil/Tanglish)
-     ↓
-FAQ Retrieval (Sentence-Transformers + FAISS)
-     ↓
-Response Generation (Mistral-7B via Ollama)
-     ↓
-Text-to-Speech (ElevenLabs or Sarvam AI)
-     ↓
-Audio Response to Caller
-```
-
-## 🔒 Security Notes
-
-- Store all API keys in environment variables
-- Never commit `.env` files to version control
-- Use `SECRET_KEY` for session management
-- Configure CORS origins appropriately for production
 
 ## 📝 License
 

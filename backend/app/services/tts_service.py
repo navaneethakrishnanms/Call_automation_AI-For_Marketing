@@ -1,6 +1,11 @@
 """
 Text-to-Speech Service
-Integrates with ElevenLabs (English) and Sarvam AI (Tamil) for speech synthesis.
+ROUTING: Sarvam AI (bulbul:v3) for ALL languages
+- Tamil → Sarvam (ta-IN)
+- Tanglish → Sarvam (ta-IN)  
+- English → Sarvam (en-IN)
+
+REMOVED: ElevenLabs (401 errors), XTTS (not integrated yet)
 """
 
 import logging
@@ -15,18 +20,59 @@ logger = logging.getLogger(__name__)
 TTSLanguage = Literal["english", "tamil", "tanglish"]
 
 
+# ============================================================================
+# SARVAM AI CONFIGURATION - STRICT VALIDATION
+# ============================================================================
+
+# Valid Sarvam speakers (as of 2024)
+SARVAM_VALID_SPEAKERS = [
+    "kavitha",    # Female Tamil (DEFAULT)
+    "meera",      # Female
+    "arvind",     # Male
+    "priya",      # Female
+]
+
+# Valid Sarvam models
+SARVAM_VALID_MODELS = [
+    "bulbul:v3",  # Latest (REQUIRED)
+    "bulbul:v2",
+    "bulbul:v1",
+]
+
+# Sarvam language codes
+SARVAM_LANG_MAP = {
+    "english": "en-IN",
+    "tamil": "ta-IN",
+    "tanglish": "ta-IN",
+}
+
+# Default configuration
+DEFAULT_SARVAM_SPEAKER = "kavitha"
+DEFAULT_SARVAM_MODEL = "bulbul:v3"
+
+
 class TTSService:
-    """Text-to-Speech service with multi-language support."""
+    """
+    Text-to-Speech service using Sarvam AI for ALL languages.
+    Model: bulbul:v3
+    Speaker: kavitha (default)
     
-    ELEVENLABS_URL = "https://api.elevenlabs.io/v1/text-to-speech"
+    ElevenLabs: DISABLED (removed)
+    XTTS: NOT INTEGRATED (future)
+    """
+    
     SARVAM_URL = "https://api.sarvam.ai/text-to-speech"
     
     def __init__(self):
-        """Initialize the TTS service."""
-        self.elevenlabs_key = settings.elevenlabs_api_key
-        self.elevenlabs_voice = settings.elevenlabs_voice_id
+        """Initialize TTS service."""
         self.sarvam_key = settings.sarvam_api_key
         self._client: Optional[httpx.AsyncClient] = None
+        
+        logger.info(f"TTS Service initialized")
+        logger.info(f"  Provider: Sarvam AI (all languages)")
+        logger.info(f"  Model: {DEFAULT_SARVAM_MODEL}")
+        logger.info(f"  Speaker: {DEFAULT_SARVAM_SPEAKER}")
+        logger.info(f"  API key: {'configured' if self.sarvam_key else 'MISSING!'}")
     
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -41,73 +87,55 @@ class TTSService:
         normalize: bool = True
     ) -> Optional[bytes]:
         """
-        Synthesize speech from text.
+        Synthesize speech using Sarvam AI.
         
         Args:
             text: Text to convert to speech
-            language: Target language
-            normalize: Whether to normalize text for natural speech
+            language: Target language (english/tamil/tanglish)
+            normalize: Whether to normalize text
             
         Returns:
-            Audio bytes (MP3) or None if failed
+            Audio bytes (WAV) or None
         """
-        # Apply TTS normalization to prevent robotic pronunciation
+        if not text or not text.strip():
+            logger.warning("Empty text provided to TTS")
+            return None
+        
+        # Apply normalization
         if normalize:
             from app.utils.tts_normalizer import normalize_for_speech
             text = normalize_for_speech(text)
-            logger.debug(f"Normalized text for TTS: {text}")
+            logger.debug(f"Normalized: {text[:80]}...")
         
-        if language == "tamil":
-            return await self._synthesize_tamil(text)
-        else:
-            # Use ElevenLabs for English and Tanglish
-            return await self._synthesize_english(text)
+        # Use Sarvam for all languages
+        return await self._synthesize_sarvam(text, language)
     
-    async def _synthesize_english(self, text: str) -> Optional[bytes]:
-        """Synthesize English speech using ElevenLabs."""
-        if not self.elevenlabs_key:
-            logger.error("ElevenLabs API key not configured")
-            return None
-        
-        try:
-            client = await self._get_client()
-            
-            url = f"{self.ELEVENLABS_URL}/{self.elevenlabs_voice}"
-            
-            headers = {
-                "xi-api-key": self.elevenlabs_key,
-                "Content-Type": "application/json",
-            }
-            
-            payload = {
-                "text": text,
-                "model_id": "eleven_monolingual_v1",
-                "voice_settings": {
-                    "stability": 0.5,
-                    "similarity_boost": 0.75,
-                    "style": 0.5,
-                    "use_speaker_boost": True
-                }
-            }
-            
-            response = await client.post(url, json=payload, headers=headers)
-            
-            if response.status_code == 200:
-                logger.info(f"ElevenLabs TTS successful: {len(text)} chars")
-                return response.content
-            else:
-                logger.error(f"ElevenLabs API error: {response.status_code} - {response.text}")
-                return None
-                
-        except Exception as e:
-            logger.error(f"ElevenLabs TTS failed: {str(e)}")
-            return None
-    
-    async def _synthesize_tamil(self, text: str) -> Optional[bytes]:
-        """Synthesize Tamil speech using Sarvam AI."""
+    async def _synthesize_sarvam(
+        self,
+        text: str,
+        language: TTSLanguage
+    ) -> Optional[bytes]:
+        """
+        Synthesize using Sarvam AI bulbul:v3.
+        STRICT validation of model and speaker.
+        """
         if not self.sarvam_key:
-            logger.error("Sarvam AI API key not configured")
+            logger.error("Sarvam API key not configured!")
             return None
+        
+        # STRICT VALIDATION
+        speaker = DEFAULT_SARVAM_SPEAKER
+        model = DEFAULT_SARVAM_MODEL
+        
+        if speaker not in SARVAM_VALID_SPEAKERS:
+            logger.error(f"Invalid speaker '{speaker}', using 'kavitha'")
+            speaker = "kavitha"
+        
+        if model not in SARVAM_VALID_MODELS:
+            logger.error(f"Invalid model '{model}', using 'bulbul:v3'")
+            model = "bulbul:v3"
+        
+        lang_code = SARVAM_LANG_MAP.get(language, "en-IN")
         
         try:
             client = await self._get_client()
@@ -119,15 +147,16 @@ class TTSService:
             
             payload = {
                 "inputs": [text],
-                "target_language_code": "ta-IN",
-                "speaker": "meera",  # Female Tamil voice
-                "pitch": 0,
+                "target_language_code": lang_code,
+                "speaker": speaker,
+                "model": model,
                 "pace": 1.0,
-                "loudness": 1.0,
                 "speech_sample_rate": 22050,
                 "enable_preprocessing": True,
-                "model": "bulbul:v1"
             }
+            
+            logger.info(f"Sarvam TTS: lang={lang_code}, model={model}, speaker={speaker}")
+            logger.debug(f"Payload: {payload}")
             
             response = await client.post(
                 self.SARVAM_URL,
@@ -135,36 +164,49 @@ class TTSService:
                 headers=headers
             )
             
+            logger.info(f"Sarvam response: {response.status_code}")
+            
             if response.status_code == 200:
                 result = response.json()
-                # Sarvam returns base64 encoded audio
                 audios = result.get("audios", [])
+                
                 if audios:
                     audio_base64 = audios[0]
                     audio_bytes = base64.b64decode(audio_base64)
-                    logger.info(f"Sarvam TTS successful: {len(text)} chars")
+                    logger.info(f"Sarvam TTS success: {len(audio_bytes)} bytes")
                     return audio_bytes
-                return None
+                else:
+                    logger.warning(f"Sarvam returned empty audio: {result}")
+                    return None
             else:
-                logger.error(f"Sarvam API error: {response.status_code} - {response.text}")
+                logger.error(f"Sarvam error {response.status_code}: {response.text}")
                 return None
                 
+        except httpx.TimeoutException:
+            logger.error("Sarvam TTS timeout")
+            return None
         except Exception as e:
-            logger.error(f"Sarvam TTS failed: {str(e)}")
+            logger.error(f"Sarvam TTS failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return None
     
     async def health_check(self) -> dict:
-        """Check if TTS services are configured."""
+        """Check TTS service health."""
         return {
-            "elevenlabs": bool(self.elevenlabs_key),
-            "sarvam": bool(self.sarvam_key)
+            "provider": "sarvam",
+            "sarvam_configured": bool(self.sarvam_key),
+            "model": DEFAULT_SARVAM_MODEL,
+            "speaker": DEFAULT_SARVAM_SPEAKER,
+            "elevenlabs": "REMOVED",
+            "xtts": "NOT_INTEGRATED",
         }
     
     async def close(self):
-        """Close the HTTP client."""
+        """Close HTTP client."""
         if self._client and not self._client.is_closed:
             await self._client.aclose()
 
 
-# Singleton instance
+# Singleton
 tts_service = TTSService()

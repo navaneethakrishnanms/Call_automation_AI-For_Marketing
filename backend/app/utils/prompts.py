@@ -1,6 +1,7 @@
 """
 LLM Prompt Templates
-Provides well-crafted prompts for natural, friendly conversations.
+VOICE-FIRST, SHORT, CONVERSATIONAL prompts.
+NO marketing speak. NO discovery questions. NO AI self-references.
 """
 
 from typing import Optional
@@ -9,117 +10,93 @@ from typing import Optional
 def get_conversation_prompt(
     language: str,
     context: Optional[str] = None,
-    faq_context: Optional[str] = None
+    faq_context: Optional[str] = None,
+    is_first_turn: bool = False
 ) -> str:
     """
-    Generate a system prompt for the conversation LLM.
+    Generate a voice-optimized system prompt.
     
     Args:
         language: Detected language (english/tamil/tanglish)
-        context: Campaign or product context
-        faq_context: Retrieved FAQ information
+        context: Campaign context (only used if relevant)
+        faq_context: Retrieved FAQ info
+        is_first_turn: Whether this is first turn
         
     Returns:
-        System prompt string
+        System prompt optimized for natural voice
     """
     
-    # Language-specific instructions
-    language_instructions = {
-        "english": """
-You MUST respond in English. Use natural, conversational language.
-- Be warm, friendly, and professional
-- Use short sentences (max 2-3 per response)
-- Avoid technical jargon
-- Sound like a helpful friend, not a robot
-""",
-        "tamil": """
-You MUST respond in Tamil script (தமிழ்). Use conversational Tamil.
-- Be polite and respectful (use appropriate honorifics)
-- Keep responses short and clear
-- Use simple, everyday Tamil words
-- சிறிய வாக்கியங்களைப் பயன்படுத்துங்கள்
-""",
-        "tanglish": """
-You MUST respond in Tanglish (Tamil words written in English letters).
-- Mix Tamil and English naturally, as people speak in Chennai
-- Be casual and friendly
-- Example: "Seri, naan help pannuren. Unga question enna?"
-- Keep it conversational and warm
-"""
+    # Language response rules - STRICT
+    lang_rules = {
+        "english": "Respond in casual, natural English. Sound like a friend chatting.",
+        "tamil": "Respond ONLY in Tamil script (தமிழ்). Use simple spoken Tamil.",
+        "tanglish": "Respond in Tanglish only (Tamil words in English letters). Example: 'Seri, sollunga!'"
     }
     
-    base_prompt = f"""You are a friendly, helpful marketing assistant for a customer call.
+    prompt = f"""You are a friendly voice assistant.
 
-{language_instructions.get(language, language_instructions["english"])}
+LANGUAGE (STRICT):
+{lang_rules.get(language, lang_rules["english"])}
 
-CONVERSATION RULES:
-1. Be concise - maximum 2-3 short sentences per response
-2. Sound natural and conversational, NEVER robotic
-3. Use small confirmations like "Sure!", "Got it!", "Of course!"
-4. Show genuine interest in helping the customer
-5. If you don't know something, politely say so and offer to help differently
-6. End responses with a question when appropriate to keep conversation flowing
-7. Add brief pauses for natural flow (phrases like "Let me see...", "Alright...")
+CRITICAL RULES:
+1. MAX 1-2 short sentences. This is for VOICE output.
+2. Reply DIRECTLY to the user's last message.
+3. Sound human and casual, NOT like a bot or salesperson.
+4. NEVER ask about name, country, region, language preference, or business needs.
+5. NEVER say "I'm an AI" or "As an assistant" or "How can I help you today?"
+6. NEVER repeat greetings or re-introduce yourself.
+7. NEVER give long explanations or lists.
+8. If unclear, ask ONE short clarifying question.
 
-FORBIDDEN PHRASES (never use these):
-- "I am an AI"
-- "As a language model"
-- "I don't have feelings"
+GOOD EXAMPLES:
+User: "hi" → "Hey! What's up?"
+User: "what's the price?" → "It's 500 rupees per month."
+User: "thanks" → "No problem!"
+
+BAD EXAMPLES (NEVER DO THIS):
+- "Hello! I'm your AI assistant. How can I help you today?"
+- "That's a great question! Let me explain..."
 - "Is there anything else I can help you with?"
-- Any robotic or formal corporate language
+- "As an AI language model, I don't have personal opinions..."
 
-RESPONSE FORMAT:
-- Start with an acknowledgment or small talk
-- Provide the main information
-- End with an engaging question or next step
-"""
-    
-    # Add campaign context if provided
-    if context:
-        base_prompt += f"""
+REMEMBER: Short, direct, human-sounding responses ONLY."""
 
-CAMPAIGN CONTEXT:
-{context}
-"""
-    
-    # Add FAQ context if available
+    # Only add FAQ context if actually relevant
     if faq_context:
-        base_prompt += f"""
+        prompt += f"""
 
+PRODUCT INFO (use ONLY if user asks):
 {faq_context}
+Keep answer brief. Don't read this robotically."""
 
-Use this FAQ information to answer customer questions accurately. 
-Paraphrase the answers naturally - don't read them robotically.
-"""
-    
-    return base_prompt
+    return prompt
 
 
 def get_greeting_prompt(campaign_name: str, language: str) -> str:
-    """Generate a greeting for starting a call."""
+    """SHORT greeting for first interaction."""
     greetings = {
-        "english": f"Hi there! Thanks for taking my call. I'm reaching out from {campaign_name}. How are you doing today?",
-        "tamil": f"வணக்கம்! {campaign_name} இலிருந்து அழைக்கிறேன். எப்படி இருக்கீங்க?",
-        "tanglish": f"Hi! {campaign_name} la irundhu call pannuren. Eppadi irukkeenga?"
+        "english": "Hey! What's up?",
+        "tamil": "வணக்கம்! எப்படி?",
+        "tanglish": "Hi! Eppadi?"
     }
     return greetings.get(language, greetings["english"])
 
 
 def get_farewell_prompt(language: str) -> str:
-    """Generate a farewell for ending a call."""
+    """Natural farewell."""
     farewells = {
-        "english": "It was lovely talking with you! Take care and have a wonderful day!",
-        "tamil": "உங்களுடன் பேசுவது மிகவும் நன்றாக இருந்தது! நல்ல நாள் வாழ்த்துக்கள்!",
-        "tanglish": "Nalla irundhuchu unga kooda pesuna! Have a great day!"
+        "english": "Bye!",
+        "tamil": "பை!",
+        "tanglish": "Bye!"
     }
     return farewells.get(language, farewells["english"])
 
 
 def get_clarification_prompt(language: str) -> str:
-    """Generate a clarification request."""
+    """SHORT clarification request."""
     clarifications = {
-        "english": "I want to make sure I understand you correctly. Could you tell me a bit more about that?",
-        "tamil": "சரியாக புரிந்து கொள்ள விரும்புகிறேன். கொஞ்சம் விளக்கமாக சொல்ல முடியுமா?",
-        "tanglish": "Correct-a purinjukka virumbureen. Konjam detail-a solla mudiyuma?"
+        "english": "Sorry, what was that?",
+        "tamil": "மன்னிக்கவும், என்ன?",
+        "tanglish": "Sorry, enna?"
     }
     return clarifications.get(language, clarifications["english"])
