@@ -1,0 +1,57 @@
+{
+    "sample_campaign": {
+        "name": "Product Launch 2024",
+        "description": "New product launch campaign",
+        "faqs": [
+            {
+                "question": "What is the price of the product?",
+                "answer": "Our product is priced at $99 with a special launch discount of 20%. That brings it down to just $79!",
+                "keywords": [
+                    "price",
+                    "cost",
+                    "how much",
+                    "discount"
+                ]
+            },
+            {
+                "question": "What are the product features?",
+                "answer": "Our product comes with AI-powered automation, 24/7 customer support, mobile app access, and seamless integration with your existing tools.",
+                "keywords": [
+                    "features",
+                    "what does it do",
+                    "capabilities"
+                ]
+            },
+            {
+                "question": "Is there a free trial available?",
+                "answer": "Yes! We offer a 14-day free trial with full access to all features. No credit card required to start.",
+                "keywords": [
+                    "trial",
+                    "free",
+                    "try",
+                    "demo"
+                ]
+            },
+            {
+                "question": "How do I get started?",
+                "answer": "Getting started is super easy! Just visit our website, click Sign Up, and you'll be ready to go in under 5 minutes.",
+                "keywords": [
+                    "start",
+                    "begin",
+                    "sign up",
+                    "register"
+                ]
+            },
+            {
+                "question": "Do you offer customer support?",
+                "answer": "Absolutely! We have 24/7 customer support via chat, email, and phone. Our team is always here to help you.",
+                "keywords": [
+                    "support",
+                    "help",
+                    "contact",
+                    "assistance"
+                ]
+            }
+        ]
+    }
+}

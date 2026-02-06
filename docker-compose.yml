@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # Backend API Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: marketing-ai-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./data/marketing_ai.db
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID:-21m00Tcm4TlvDq8ikWAM}
+      - SARVAM_API_KEY=${SARVAM_API_KEY}
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-mistral:7b-instruct}
+      - DEBUG=${DEBUG:-false}
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://frontend:80
+      - SECRET_KEY=${SECRET_KEY:-change-this-in-production}
+    volumes:
+      - backend_data:/app/data
+      - ./backend/faqs:/app/faqs
+    networks:
+      - marketing-ai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Frontend Web Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: marketing-ai-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - marketing-ai-network
+    restart: unless-stopped
+
+networks:
+  marketing-ai-network:
+    driver: bridge
+
+volumes:
+  backend_data:
+    driver: local

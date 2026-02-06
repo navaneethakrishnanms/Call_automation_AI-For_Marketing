@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+  min-height: 100vh;
+  color: #f1f5f9;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Glassmorphism card styles */
+@layer components {
+  .glass-card {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl;
+  }
+
+  .glass-card-hover {
+    @apply transition-all duration-300 hover:bg-white/10 hover:border-white/20 hover:shadow-primary-500/20 hover:shadow-xl;
+  }
+
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary-400 via-accent-400 to-primary-400 bg-clip-text text-transparent;
+  }
+
+  .btn-primary {
+    @apply px-6 py-3 bg-gradient-to-r from-primary-500 to-accent-500 rounded-xl font-semibold text-white shadow-lg shadow-primary-500/30 transition-all duration-300 hover:shadow-xl hover:shadow-primary-500/40 hover:scale-105 active:scale-100;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3 bg-white/10 border border-white/20 rounded-xl font-semibold text-white transition-all duration-300 hover:bg-white/20 hover:border-white/30;
+  }
+
+  .btn-icon {
+    @apply p-2 rounded-lg bg-white/5 border border-white/10 text-white/70 transition-all duration-200 hover:bg-white/10 hover:text-white hover:border-white/20;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all duration-200;
+  }
+
+  .badge {
+    @apply px-3 py-1 rounded-full text-xs font-semibold;
+  }
+
+  .badge-hot {
+    @apply bg-rose-500/20 text-rose-400 border border-rose-500/30;
+  }
+
+  .badge-warm {
+    @apply bg-amber-500/20 text-amber-400 border border-amber-500/30;
+  }
+
+  .badge-cold {
+    @apply bg-sky-500/20 text-sky-400 border border-sky-500/30;
+  }
+
+  .badge-active {
+    @apply bg-emerald-500/20 text-emerald-400 border border-emerald-500/30;
+  }
+
+  .badge-inactive {
+    @apply bg-slate-500/20 text-slate-400 border border-slate-500/30;
+  }
+
+  .stat-card {
+    @apply glass-card p-6 relative overflow-hidden;
+  }
+
+  .stat-card::before {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none;
+  }
+
+  .table-row {
+    @apply border-b border-white/5 hover:bg-white/5 transition-colors duration-200;
+  }
+
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-white/60 transition-all duration-200 hover:bg-white/10 hover:text-white;
+  }
+
+  .sidebar-link-active {
+    @apply bg-gradient-to-r from-primary-500/20 to-accent-500/20 text-white border border-primary-500/30;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Animations */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Chart customization */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: rgba(255, 255, 255, 0.1);
+}
+
+.recharts-text {
+  fill: rgba(255, 255, 255, 0.6);
+}
