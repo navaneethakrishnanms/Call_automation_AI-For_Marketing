@@ -226,7 +226,7 @@ async def delete_campaign(
     campaign_id: int,
     db: AsyncSession = Depends(get_db)
 ):
-    """Delete a campaign."""
+    """Delete a campaign and all related data."""
     result = await db.execute(
         select(Campaign).where(Campaign.id == campaign_id)
     )
@@ -238,10 +238,23 @@ async def delete_campaign(
             detail="Campaign not found"
         )
     
+    # Delete related calls first (to avoid foreign key constraint)
+    from sqlalchemy import delete
+    await db.execute(delete(Call).where(Call.campaign_id == campaign_id))
+    
+    # Delete related leads
+    await db.execute(delete(Lead).where(Lead.campaign_id == campaign_id))
+    
     # Remove from FAQ service
     faq_service.remove_campaign(campaign_id)
     
+    # Delete the campaign
     await db.delete(campaign)
+    
+    # COMMIT the changes!
+    await db.commit()
+    
+    return None
 
 
 @router.post("/{campaign_id}/faqs", response_model=CampaignResponse)

@@ -50,19 +50,22 @@ _sessions: dict = {}
 async def voice_chat_audio(
     audio: UploadFile = File(...),
     session_id: Optional[str] = Form(None),
-    campaign_id: Optional[int] = Form(None),
+    campaign_id: int = Form(...),  # REQUIRED - must select a campaign
     db: AsyncSession = Depends(get_db)
 ):
     """
     PRIMARY ENDPOINT: Process voice audio from browser microphone.
     
+    REQUIRES campaign_id - voice bot only works with a registered campaign.
+    The bot will respond based on the campaign's FAQs and context.
+    
     Flow:
-    1. Receive audio from browser (webm/mp3/wav)
+    1. Validate campaign exists
     2. STT: Convert speech to text (Whisper via Groq)
     3. Detect language (EN/TA/Tanglish)
     4. Retrieve relevant FAQs (FAISS)
     5. Generate response (Llama 3.1 8B via Ollama)
-    6. TTS: Convert to speech (Sarvam AI)
+    6. TTS: Convert to speech
     7. Return audio + text + lead score
     """
     from app.services.stt_service import stt_service
@@ -73,6 +76,20 @@ async def voice_chat_audio(
     from app.services.lead_qualifier import lead_qualifier
     import uuid
     
+    # STEP 0: Validate campaign exists (REQUIRED)
+    result = await db.execute(
+        select(Campaign).where(Campaign.id == campaign_id)
+    )
+    campaign = result.scalar_one_or_none()
+    
+    if not campaign:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Campaign {campaign_id} not found. Please select a valid campaign."
+        )
+    
+    logger.info(f"Voice chat for campaign: {campaign.name} (ID: {campaign_id})")
+    
     # Generate or retrieve session
     if not session_id:
         session_id = str(uuid.uuid4())
@@ -80,14 +97,16 @@ async def voice_chat_audio(
             "history": [],
             "transcript": [],
             "lead_signals": [],
-            "campaign_id": campaign_id
+            "campaign_id": campaign_id,
+            "campaign_name": campaign.name
         }
     elif session_id not in _sessions:
         _sessions[session_id] = {
             "history": [],
             "transcript": [],
             "lead_signals": [],
-            "campaign_id": campaign_id
+            "campaign_id": campaign_id,
+            "campaign_name": campaign.name
         }
     
     session = _sessions[session_id]
@@ -97,7 +116,7 @@ async def voice_chat_audio(
         audio_bytes = await audio.read()
         filename = audio.filename or "audio.webm"
         
-        logger.info(f"Received audio: {len(audio_bytes)} bytes, file: {filename}")
+        logger.info(f"Received audio: {len(audio_bytes)} bytes for campaign '{campaign.name}'")
         
         # Step 2: Speech-to-Text
         user_text = await stt_service.transcribe_bytes(audio_bytes, filename)
@@ -130,10 +149,26 @@ async def voice_chat_audio(
             if campaign:
                 campaign_context = f"Campaign: {campaign.name}. {campaign.description or ''}"
                 
-                # Try FAQ retrieval
+                # AUTO-LOAD FAQs into FAISS if not already loaded
+                if not faq_service.is_campaign_loaded(cid) and campaign.faqs:
+                    logger.info(f"Auto-loading FAQs for campaign {cid} into FAISS")
+                    faq_service.load_faqs(cid, campaign.faqs)
+                
+                # Retrieve relevant FAQs
                 if faq_service.is_campaign_loaded(cid):
-                    relevant_faqs = faq_service.retrieve(cid, user_text, top_k=3, threshold=0.5)
+                    relevant_faqs = faq_service.retrieve(cid, user_text, top_k=3, threshold=0.3)  # Lower threshold
                     faq_context = faq_service.format_faq_context(relevant_faqs)
+                    logger.info(f"FAQ context for LLM: {faq_context[:200]}..." if faq_context else "No FAQs matched")
+                
+                # FALLBACK: If no FAQs matched but campaign has FAQs, pass them directly
+                if not faq_context and campaign.faqs:
+                    logger.info("No FAQ match from FAISS, passing top FAQs directly")
+                    # Format top 3 FAQs directly
+                    direct_faqs = campaign.faqs[:3]
+                    faq_parts = ["Here are some relevant FAQ answers:"]
+                    for i, faq in enumerate(direct_faqs, 1):
+                        faq_parts.append(f"\nQ{i}: {faq.get('question', '')}\nA{i}: {faq.get('answer', '')}")
+                    faq_context = "\n".join(faq_parts)
         
         # Step 5: Generate LLM response
         ai_response = await llm_service.generate_response(
@@ -192,7 +227,7 @@ async def voice_chat_text(
 ):
     """
     Text-based chat endpoint for testing (no audio).
-    Useful for development and debugging.
+    REQUIRES campaign_id - only works with registered campaigns.
     """
     from app.services.language_detector import language_detector
     from app.services.faq_retrieval import faq_service
@@ -201,6 +236,27 @@ async def voice_chat_text(
     from app.services.lead_qualifier import lead_qualifier
     import uuid
     
+    # Validate campaign_id is provided
+    if not request.campaign_id:
+        raise HTTPException(
+            status_code=400,
+            detail="campaign_id is required. Please select a campaign."
+        )
+    
+    # Validate campaign exists
+    result = await db.execute(
+        select(Campaign).where(Campaign.id == request.campaign_id)
+    )
+    campaign = result.scalar_one_or_none()
+    
+    if not campaign:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Campaign {request.campaign_id} not found."
+        )
+    
+    logger.info(f"Text chat for campaign: {campaign.name}")
+    
     session_id = request.session_id or str(uuid.uuid4())
     
     if session_id not in _sessions:
@@ -208,7 +264,8 @@ async def voice_chat_text(
             "history": [],
             "transcript": [],
             "lead_signals": [],
-            "campaign_id": request.campaign_id
+            "campaign_id": request.campaign_id,
+            "campaign_name": campaign.name
         }
     
     session = _sessions[session_id]
@@ -219,21 +276,29 @@ async def voice_chat_text(
     # Detect language
     detected_lang = language_detector.detect_language(user_text)
     
-    # Get campaign context
-    campaign_context = None
+    # Get campaign context and FAQs
+    campaign_context = f"Campaign: {campaign.name}. {campaign.description or ''}"
     faq_context = ""
     
-    if request.campaign_id:
-        result = await db.execute(
-            select(Campaign).where(Campaign.id == request.campaign_id)
-        )
-        campaign = result.scalar_one_or_none()
-        if campaign:
-            campaign_context = f"Campaign: {campaign.name}. {campaign.description or ''}"
-            
-            if faq_service.is_campaign_loaded(request.campaign_id):
-                relevant_faqs = faq_service.retrieve(request.campaign_id, user_text, top_k=3, threshold=0.5)
-                faq_context = faq_service.format_faq_context(relevant_faqs)
+    # AUTO-LOAD FAQs into FAISS if not already loaded
+    if not faq_service.is_campaign_loaded(request.campaign_id) and campaign.faqs:
+        logger.info(f"Auto-loading FAQs for campaign {request.campaign_id} into FAISS")
+        faq_service.load_faqs(request.campaign_id, campaign.faqs)
+    
+    # Retrieve relevant FAQs
+    if faq_service.is_campaign_loaded(request.campaign_id):
+        relevant_faqs = faq_service.retrieve(request.campaign_id, user_text, top_k=3, threshold=0.3)
+        faq_context = faq_service.format_faq_context(relevant_faqs)
+        logger.info(f"FAQ context: {faq_context[:200]}..." if faq_context else "No FAQs matched")
+    
+    # FALLBACK: If no FAQs matched but campaign has FAQs, pass them directly
+    if not faq_context and campaign.faqs:
+        logger.info("No FAQ match, passing top FAQs directly")
+        direct_faqs = campaign.faqs[:3]
+        faq_parts = ["Here are some relevant FAQ answers:"]
+        for i, faq in enumerate(direct_faqs, 1):
+            faq_parts.append(f"\nQ{i}: {faq.get('question', '')}\nA{i}: {faq.get('answer', '')}")
+        faq_context = "\n".join(faq_parts)
     
     # Generate response
     ai_response = await llm_service.generate_response(

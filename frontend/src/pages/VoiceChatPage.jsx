@@ -6,12 +6,13 @@ import {
     VolumeX,
     Loader2,
     MessageCircle,
-    Phone,
     RefreshCw,
     Flame,
     Thermometer,
     Snowflake,
-    Send
+    Send,
+    AlertCircle,
+    Building2
 } from 'lucide-react'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -28,10 +29,20 @@ function VoiceChatPage() {
     const [textInput, setTextInput] = useState('')
     const [audioEnabled, setAudioEnabled] = useState(true)
 
+    // Campaign selection state
+    const [campaigns, setCampaigns] = useState([])
+    const [selectedCampaign, setSelectedCampaign] = useState(null)
+    const [loadingCampaigns, setLoadingCampaigns] = useState(true)
+
     const mediaRecorderRef = useRef(null)
     const audioChunksRef = useRef([])
     const audioRef = useRef(null)
     const messagesEndRef = useRef(null)
+
+    // Fetch campaigns on mount
+    useEffect(() => {
+        fetchCampaigns()
+    }, [])
 
     // Auto-scroll to bottom of messages
     useEffect(() => {
@@ -48,7 +59,27 @@ function VoiceChatPage() {
         }
     }, [])
 
+    const fetchCampaigns = async () => {
+        try {
+            setLoadingCampaigns(true)
+            const response = await fetch(`${API_BASE}/api/campaigns?page=1&page_size=100`)
+            if (response.ok) {
+                const data = await response.json()
+                setCampaigns(data.items || [])
+            }
+        } catch (err) {
+            console.error('Failed to fetch campaigns:', err)
+        } finally {
+            setLoadingCampaigns(false)
+        }
+    }
+
     const startRecording = async () => {
+        if (!selectedCampaign) {
+            setError('Please select a campaign first')
+            return
+        }
+
         try {
             setError(null)
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -94,6 +125,7 @@ function VoiceChatPage() {
         try {
             const formData = new FormData()
             formData.append('audio', audioBlob, 'recording.webm')
+            formData.append('campaign_id', selectedCampaign.id)
             if (sessionId) {
                 formData.append('session_id', sessionId)
             }
@@ -104,7 +136,8 @@ function VoiceChatPage() {
             })
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`)
+                const errorData = await response.json().catch(() => ({}))
+                throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
             }
 
             const data = await response.json()
@@ -112,7 +145,7 @@ function VoiceChatPage() {
 
         } catch (err) {
             console.error('Failed to send audio:', err)
-            setError('Failed to process audio. Please try again.')
+            setError(err.message || 'Failed to process audio. Please try again.')
         } finally {
             setIsProcessing(false)
         }
@@ -120,6 +153,11 @@ function VoiceChatPage() {
 
     const sendTextMessage = async () => {
         if (!textInput.trim()) return
+
+        if (!selectedCampaign) {
+            setError('Please select a campaign first')
+            return
+        }
 
         const userText = textInput.trim()
         setTextInput('')
@@ -139,12 +177,14 @@ function VoiceChatPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     text: userText,
-                    session_id: sessionId
+                    session_id: sessionId,
+                    campaign_id: selectedCampaign.id
                 })
             })
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`)
+                const errorData = await response.json().catch(() => ({}))
+                throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
             }
 
             const data = await response.json()
@@ -152,7 +192,7 @@ function VoiceChatPage() {
 
         } catch (err) {
             console.error('Failed to send text:', err)
-            setError('Failed to process message. Please try again.')
+            setError(err.message || 'Failed to process message. Please try again.')
         } finally {
             setIsProcessing(false)
         }
@@ -231,51 +271,84 @@ function VoiceChatPage() {
     return (
         <div className="h-[calc(100vh-8rem)] flex flex-col">
             {/* Header */}
-            <div className="glass-card p-4 mb-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-gradient-to-br from-primary-500/20 to-accent-500/20">
-                        <MessageCircle className="w-6 h-6 text-primary-400" />
-                    </div>
-                    <div>
-                        <h1 className="text-xl font-bold text-white">Voice AI Chatbot</h1>
-                        <p className="text-white/50 text-sm">Speak or type to interact</p>
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                    {/* Lead Score Badge */}
-                    {leadStatus && (
-                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${getLeadColor()}`}>
-                            {getLeadIcon()}
-                            <span className="font-medium capitalize">{leadStatus}</span>
-                            {leadScore !== null && (
-                                <span className="text-xs opacity-70">({(leadScore * 100).toFixed(0)}%)</span>
-                            )}
+            <div className="glass-card p-4 mb-4">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-gradient-to-br from-primary-500/20 to-accent-500/20">
+                            <MessageCircle className="w-6 h-6 text-primary-400" />
                         </div>
-                    )}
+                        <div>
+                            <h1 className="text-xl font-bold text-white">Voice AI Chatbot</h1>
+                            <p className="text-white/50 text-sm">Speak or type to interact</p>
+                        </div>
+                    </div>
 
-                    {/* Audio Toggle */}
-                    <button
-                        onClick={() => setAudioEnabled(!audioEnabled)}
-                        className={`p-2 rounded-lg transition-colors ${audioEnabled
-                            ? 'bg-primary-500/20 text-primary-400 hover:bg-primary-500/30'
-                            : 'bg-white/5 text-white/50 hover:bg-white/10'
-                            }`}
-                        title={audioEnabled ? 'Mute audio' : 'Enable audio'}
-                    >
-                        {audioEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-                    </button>
+                    {/* Campaign Selector - REQUIRED */}
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                            <Building2 className="w-5 h-5 text-white/50" />
+                            <select
+                                value={selectedCampaign?.id || ''}
+                                onChange={(e) => {
+                                    const campaign = campaigns.find(c => c.id === parseInt(e.target.value))
+                                    setSelectedCampaign(campaign)
+                                    startNewSession() // Reset session when campaign changes
+                                }}
+                                className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white min-w-[200px] focus:outline-none focus:border-primary-500"
+                                disabled={loadingCampaigns}
+                            >
+                                <option value="">Select Campaign</option>
+                                {campaigns.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
+                        </div>
 
-                    {/* New Session Button */}
-                    <button
-                        onClick={startNewSession}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-colors"
-                    >
-                        <RefreshCw className="w-4 h-4" />
-                        New Session
-                    </button>
+                        {/* Lead Score Badge */}
+                        {leadStatus && (
+                            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${getLeadColor()}`}>
+                                {getLeadIcon()}
+                                <span className="font-medium capitalize">{leadStatus}</span>
+                                {leadScore !== null && (
+                                    <span className="text-xs opacity-70">({(leadScore * 100).toFixed(0)}%)</span>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Audio Toggle */}
+                        <button
+                            onClick={() => setAudioEnabled(!audioEnabled)}
+                            className={`p-2 rounded-lg transition-colors ${audioEnabled
+                                ? 'bg-primary-500/20 text-primary-400 hover:bg-primary-500/30'
+                                : 'bg-white/5 text-white/50 hover:bg-white/10'
+                                }`}
+                            title={audioEnabled ? 'Mute audio' : 'Enable audio'}
+                        >
+                            {audioEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+                        </button>
+
+                        {/* New Session Button */}
+                        <button
+                            onClick={startNewSession}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+                        >
+                            <RefreshCw className="w-4 h-4" />
+                            New
+                        </button>
+                    </div>
                 </div>
             </div>
+
+            {/* Campaign Warning */}
+            {!selectedCampaign && !loadingCampaigns && (
+                <div className="mb-4 p-4 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center gap-3">
+                    <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0" />
+                    <div>
+                        <p className="text-amber-400 font-medium">Select a Campaign to Start</p>
+                        <p className="text-amber-400/70 text-sm">Choose a campaign from the dropdown above to enable voice chat.</p>
+                    </div>
+                </div>
+            )}
 
             {/* Messages Area */}
             <div className="flex-1 glass-card p-4 overflow-y-auto mb-4">
@@ -284,10 +357,13 @@ function VoiceChatPage() {
                         <div className="p-4 rounded-full bg-gradient-to-br from-primary-500/20 to-accent-500/20 mb-4">
                             <Mic className="w-12 h-12 text-primary-400" />
                         </div>
-                        <h2 className="text-xl font-semibold text-white mb-2">Start a Conversation</h2>
+                        <h2 className="text-xl font-semibold text-white mb-2">
+                            {selectedCampaign ? `Chat: ${selectedCampaign.name}` : 'Start a Conversation'}
+                        </h2>
                         <p className="text-white/50 max-w-md">
-                            Click the microphone button and speak, or type a message below.
-                            The AI will respond in your language (English, Tamil, or Tanglish).
+                            {selectedCampaign
+                                ? 'Click the microphone and speak, or type a message below.'
+                                : 'Select a campaign to begin chatting with the AI assistant.'}
                         </p>
                     </div>
                 ) : (
@@ -334,13 +410,13 @@ function VoiceChatPage() {
                             value={textInput}
                             onChange={(e) => setTextInput(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && sendTextMessage()}
-                            placeholder="Type a message..."
+                            placeholder={selectedCampaign ? "Type a message..." : "Select a campaign first"}
                             className="flex-1 bg-transparent text-white placeholder-white/30 outline-none"
-                            disabled={isProcessing}
+                            disabled={isProcessing || !selectedCampaign}
                         />
                         <button
                             onClick={sendTextMessage}
-                            disabled={isProcessing || !textInput.trim()}
+                            disabled={isProcessing || !textInput.trim() || !selectedCampaign}
                             className="p-2 rounded-lg text-white/50 hover:text-primary-400 hover:bg-white/5 disabled:opacity-30 transition-colors"
                         >
                             <Send className="w-5 h-5" />
@@ -350,10 +426,10 @@ function VoiceChatPage() {
                     {/* Voice Recording Button */}
                     <button
                         onClick={isRecording ? stopRecording : startRecording}
-                        disabled={isProcessing}
+                        disabled={isProcessing || !selectedCampaign}
                         className={`relative p-4 rounded-full transition-all ${isRecording
                             ? 'bg-rose-500 text-white animate-pulse'
-                            : isProcessing
+                            : isProcessing || !selectedCampaign
                                 ? 'bg-white/10 text-white/30'
                                 : 'bg-gradient-to-br from-primary-500 to-accent-500 text-white hover:shadow-lg hover:shadow-primary-500/30'
                             }`}
@@ -375,7 +451,9 @@ function VoiceChatPage() {
 
                 {/* Status Text */}
                 <div className="mt-2 text-center text-sm text-white/40">
-                    {isRecording ? (
+                    {!selectedCampaign ? (
+                        <span className="text-amber-400">Please select a campaign to start</span>
+                    ) : isRecording ? (
                         <span className="text-rose-400">Recording... Click to stop</span>
                     ) : isProcessing ? (
                         <span className="text-primary-400">Processing...</span>
