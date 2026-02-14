@@ -182,7 +182,7 @@ Marketing_AI/
 │   │   ├── schemas/             # Pydantic schemas
 │   │   └── utils/               # Utilities
 │   │       ├── prompts.py       # LLM prompts
-│   │       └── tts_normalizer.py # TTS text normalization
+│   │       └── tts_normalizer.py ## TTS text normalization
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
