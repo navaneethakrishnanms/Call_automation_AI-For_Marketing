@@ -18,6 +18,7 @@ from app.api.deps import get_db
 from app.models.call import Call, CallStatus
 from app.models.lead import Lead
 from app.models.campaign import Campaign
+from app.utils.prompts import _detect_tone
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +36,12 @@ class VoiceChatResponse(BaseModel):
     """Response from voice chat endpoint."""
     text_response: str
     audio_base64: Optional[str] = None
-    audio_format: str = "mp3"
+    audio_format: str = "wav"
     detected_language: str
     lead_score: Optional[float] = None
     lead_status: Optional[str] = None
     session_id: str
+    pipeline_info: Optional[dict] = None  # Context window metadata
 
 
 # In-memory session storage (use Redis in production)
@@ -118,13 +120,16 @@ async def voice_chat_audio(
         
         logger.info(f"Received audio: {len(audio_bytes)} bytes for campaign '{campaign.name}'")
         
-        # Step 2: Speech-to-Text
-        user_text = await stt_service.transcribe_bytes(audio_bytes, filename)
+        # Step 2: Speech-to-Text (with language hint from previous turn)
+        # On first turn: language_hint=None → parallel dual-engine (Whisper + Sarvam)
+        # On subsequent turns: uses detected language → routes to best engine
+        previous_lang = session.get("detected_language", None)
+        user_text = await stt_service.transcribe_bytes(audio_bytes, filename, language_hint=previous_lang)
         
         if not user_text:
             logger.warning("STT returned empty result")
             return VoiceChatResponse(
-                text_response="I couldn't hear you clearly. Please try again.",
+                text_response="Sorry, couldn't hear you. Say that again?",
                 detected_language="english",
                 session_id=session_id
             )
@@ -132,9 +137,10 @@ async def voice_chat_audio(
         logger.info(f"STT result: {user_text}")
         session["transcript"].append(f"User: {user_text}")
         
-        # Step 3: Detect language
+        # Step 3: Detect language and store for next turn's STT routing
         detected_lang = language_detector.detect_language(user_text)
-        logger.info(f"Detected language: {detected_lang}")
+        session["detected_language"] = detected_lang  # Store for next turn's STT routing
+        logger.info(f"Detected language: {detected_lang} (stored for next STT routing)")
         
         # Step 4: Get campaign context and FAQs
         campaign_context = None
@@ -180,7 +186,7 @@ async def voice_chat_audio(
         )
         
         if not ai_response:
-            ai_response = "I'm sorry, I couldn't process that. Could you please repeat?"
+            ai_response = "Hmm, didn't get that. One more time?"
         
         logger.info(f"LLM response: {ai_response[:100]}...")
         
@@ -205,14 +211,39 @@ async def voice_chat_audio(
         if audio_response:
             audio_base64 = base64.b64encode(audio_response).decode("utf-8")
         
+        # Build pipeline info for context window
+        faq_count = len(faq_context.split('\n')) if faq_context else 0
+        
+        # Extract topics from user messages for chat analysis
+        user_messages = [h["content"] for h in session["history"] if h["role"] == "user"]
+        
+        pipeline_info = {
+            "stt_engine": "sarvam+whisper" if previous_lang else "dual-engine",
+            "detected_language": detected_lang,
+            "llm_model": "groq/llama-3.3-70b",
+            "tts_engine": "sarvam-priya",
+            "tts_status": "success" if audio_response else "failed",
+            "faq_matches": faq_count,
+            "campaign_name": campaign.name if campaign else "N/A",
+            "tone": _detect_tone(campaign_context),  # professional or casual
+            "message_count": len(session["history"]),
+            "lead_signals": session.get("lead_signals", [])[-5:],
+            "user_transcript": user_text,
+            # Chat analysis for context window
+            "chat_history": session["history"][-10:],  # Last 10 messages
+            "user_topics": user_messages[-5:],  # Last 5 user messages as topics
+            "turn_count": len(user_messages),
+        }
+        
         return VoiceChatResponse(
             text_response=ai_response,
             audio_base64=audio_base64,
-            audio_format="mp3",
+            audio_format="wav",
             detected_language=detected_lang,
             lead_score=qualification["score"],
             lead_status=qualification["qualification"],
-            session_id=session_id
+            session_id=session_id,
+            pipeline_info=pipeline_info
         )
         
     except Exception as e:
@@ -310,7 +341,7 @@ async def voice_chat_text(
     )
     
     if not ai_response:
-        ai_response = "I'm sorry, could you please repeat that?"
+        ai_response = "Hmm, didn't get that. One more time?"
     
     # Update session
     session["history"].append({"role": "user", "content": user_text})
@@ -330,14 +361,36 @@ async def voice_chat_text(
     audio_response = await tts_service.synthesize(ai_response, detected_lang)
     audio_base64 = base64.b64encode(audio_response).decode("utf-8") if audio_response else None
     
+    # Build pipeline info for context window
+    faq_count = len(faq_context.split('\n')) if faq_context else 0
+    user_messages = [h["content"] for h in session["history"] if h["role"] == "user"]
+    
+    pipeline_info = {
+        "stt_engine": "text-input",
+        "detected_language": detected_lang,
+        "llm_model": "groq/llama-3.3-70b",
+        "tts_engine": "sarvam-priya",
+        "tts_status": "success" if audio_response else "failed",
+        "faq_matches": faq_count,
+        "campaign_name": campaign.name if campaign else "N/A",
+        "tone": _detect_tone(campaign_context),
+        "message_count": len(session["history"]),
+        "lead_signals": session.get("lead_signals", [])[-5:],
+        "user_transcript": user_text,
+        "chat_history": session["history"][-10:],
+        "user_topics": user_messages[-5:],
+        "turn_count": len(user_messages),
+    }
+    
     return VoiceChatResponse(
         text_response=ai_response,
         audio_base64=audio_base64,
-        audio_format="mp3",
+        audio_format="wav",
         detected_language=detected_lang,
         lead_score=qualification["score"],
         lead_status=qualification["qualification"],
-        session_id=session_id
+        session_id=session_id,
+        pipeline_info=pipeline_info
     )
 
 

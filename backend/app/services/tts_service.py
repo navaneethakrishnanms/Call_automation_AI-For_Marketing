@@ -3,11 +3,13 @@ Text-to-Speech Service
 ======================
 MODEL SELECTION RULES:
   - English → XTTS v2 (local, "Daisy Studious" voice)
-  - Tamil/Tanglish → Sarvam AI Bulbul v3 (kavitha voice)
+  - Tamil/Tanglish → Sarvam AI Bulbul v3 (meera voice — conversational)
 
 NEVER use XTTS for Tamil.
 NEVER use Sarvam for English (unless XTTS fails).
 """
+
+import re
 
 import os
 import logging
@@ -34,9 +36,9 @@ XTTS_LANGUAGE = "en"
 # ============================================================================
 # SARVAM AI CONFIGURATION (Tamil/Tanglish only)
 # ============================================================================
-SARVAM_VALID_SPEAKERS = ["kavitha", "meera", "arvind", "priya"]
+SARVAM_VALID_SPEAKERS = ["aditya", "ritu", "ashutosh", "priya", "neha", "rahul", "pooja", "rohan", "simran", "kavya", "amit", "dev"]
 SARVAM_MODEL = "bulbul:v3"
-SARVAM_SPEAKER = "kavitha"
+SARVAM_SPEAKER = "priya"  # Matches our chatbot persona + natural female voice
 SARVAM_LANG_MAP = {
     "tamil": "ta-IN",
     "tanglish": "ta-IN",
@@ -105,6 +107,9 @@ class TTSService:
         if normalize:
             from app.utils.tts_normalizer import normalize_for_speech
             text = normalize_for_speech(text)
+        
+        # Preprocess text for natural speech rhythm
+        text = self._preprocess_for_speech(text)
         
         # Determine Sarvam language code
         if language == "english":
@@ -206,12 +211,13 @@ class TTSService:
                 "target_language_code": lang_code,
                 "speaker": SARVAM_SPEAKER,
                 "model": SARVAM_MODEL,
-                "pace": 1.0,
-                "speech_sample_rate": 22050,
+                "pace": 1.1,  # Natural phone call speed — slightly fast
+                "speech_sample_rate": 24000,  # Better quality
                 "enable_preprocessing": True,
+                "encoding": "wav",
             }
             
-            logger.info(f"Sarvam TTS: lang={lang_code}, speaker={SARVAM_SPEAKER}")
+            logger.info(f"Sarvam TTS: lang={lang_code}, speaker={SARVAM_SPEAKER}, text='{text[:60]}...'")
             
             response = await client.post(
                 self.SARVAM_URL,
@@ -224,12 +230,12 @@ class TTSService:
                 audios = result.get("audios", [])
                 if audios:
                     audio_bytes = base64.b64decode(audios[0])
-                    logger.info(f"Sarvam TTS success: {len(audio_bytes)} bytes")
+                    logger.info(f"Sarvam TTS success: {len(audio_bytes)} bytes, format=wav")
                     return audio_bytes
                 logger.warning("Sarvam returned empty audio")
                 return None
             else:
-                logger.error(f"Sarvam error {response.status_code}: {response.text[:100]}")
+                logger.error(f"Sarvam error {response.status_code}: {response.text[:200]}")
                 return None
                 
         except httpx.TimeoutException:
@@ -238,6 +244,40 @@ class TTSService:
         except Exception as e:
             logger.error(f"Sarvam TTS error: {e}")
             return None
+    
+    def _preprocess_for_speech(self, text: str) -> str:
+        """
+        Make text sound more natural when spoken by TTS.
+        Adds micro-pauses and breathing points that make speech human-like.
+        """
+        # Add natural pause after filler words (comma = micro-pause in TTS)
+        fillers = ["Oh", "Hmm", "Yeah", "Actually", "So", "Well",
+                   "ஆமா", "ஹ்ம்ம்", "அட", "ஓ", "ஹாய்",
+                   "Aama", "Ada", "Hey", "Ah"]
+        for filler in fillers:
+            # Add comma after filler at start of sentence if not already there
+            text = re.sub(
+                rf'^({re.escape(filler)})([^,!?.])',
+                rf'\1, \2', text
+            )
+        
+        # Add micro-pause before questions (makes it sound like thinking)
+        text = re.sub(r'(\w) (\?)', r'\1... \2', text, count=1)
+        
+        # Break very long sentences with natural pauses
+        words = text.split()
+        if len(words) > 15:
+            mid = len(words) // 2
+            # Find nearest comma or natural break point near middle
+            for i in range(mid - 2, mid + 3):
+                if i < len(words) and words[i].endswith((',', '.', '!')):
+                    break
+            else:
+                # Insert a pause comma near the middle
+                words.insert(mid, ',')
+            text = ' '.join(words)
+        
+        return text.strip()
     
     async def health_check(self) -> dict:
         return {

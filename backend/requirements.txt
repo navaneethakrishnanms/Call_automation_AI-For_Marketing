@@ -16,7 +16,9 @@ twilio>=8.10.0
 # AI/ML
 groq>=0.5.0
 sentence-transformers>=2.3.1
-faiss-cpu>=1.9.0
+chromadb>=0.4.22
+langchain-chroma>=0.1.0
+langchain-community>=0.0.20
 langdetect>=1.0.9
 
 # Audio processing

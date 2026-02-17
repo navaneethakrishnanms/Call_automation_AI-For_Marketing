@@ -25,7 +25,11 @@ class Settings(BaseSettings):
     # Sarvam AI (TTS for all languages)
     sarvam_api_key: str = ""
     
-    # Ollama (Local LLM)
+    # OpenRouter (Qwen LLM - primary)
+    openrouter_api_key: str = ""
+    openrouter_model: str = "qwen/qwen2.5-vl-72b-instruct"
+    
+    # Ollama (Local LLM - fallback)
     ollama_host: str = "http://localhost:11434"
     ollama_model: str = "llama3.1:8b"
     
