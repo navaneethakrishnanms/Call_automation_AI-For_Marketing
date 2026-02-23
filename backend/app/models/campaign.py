@@ -5,7 +5,7 @@ Represents marketing campaigns with their FAQs and settings.
 
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Text, DateTime, Boolean, JSON
+from sqlalchemy import Integer, String, Text, DateTime, Boolean, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -32,6 +32,27 @@ class Campaign(Base):
         Text,
         default="Thank you for calling! Have a wonderful day!"
     )
+    
+    # Auto-build pipeline fields
+    website_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    target_audience: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    goal: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    languages: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=list)
+    competitors: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=list)
+    
+    # Build status tracking
+    build_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, default="idle")
+    build_progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    build_log: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=list)
+    
+    # Auto-generated content
+    extracted_knowledge: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    voice_scripts: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    competitor_intel: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    
+    # Crawl tracking
+    pages_crawled: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_crawled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

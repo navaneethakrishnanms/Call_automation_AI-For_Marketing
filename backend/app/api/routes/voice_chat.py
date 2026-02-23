@@ -155,21 +155,25 @@ async def voice_chat_audio(
             if campaign:
                 campaign_context = f"Campaign: {campaign.name}. {campaign.description or ''}"
                 
-                # AUTO-LOAD FAQs into FAISS if not already loaded
-                if not faq_service.is_campaign_loaded(cid) and campaign.faqs:
-                    logger.info(f"Auto-loading FAQs for campaign {cid} into FAISS")
-                    faq_service.load_faqs(cid, campaign.faqs)
+                # AUTO-LOAD knowledge base (name + description + FAQs) if not loaded
+                if not faq_service.is_campaign_loaded(cid):
+                    logger.info(f"Auto-loading knowledge base for campaign {cid}")
+                    faq_service.load_campaign_knowledge(
+                        campaign_id=cid,
+                        name=campaign.name,
+                        description=campaign.description,
+                        faqs=campaign.faqs
+                    )
                 
-                # Retrieve relevant FAQs
+                # Retrieve relevant knowledge items (FAQs + description + name)
                 if faq_service.is_campaign_loaded(cid):
-                    relevant_faqs = faq_service.retrieve(cid, user_text, top_k=3, threshold=0.3)  # Lower threshold
-                    faq_context = faq_service.format_faq_context(relevant_faqs)
-                    logger.info(f"FAQ context for LLM: {faq_context[:200]}..." if faq_context else "No FAQs matched")
+                    relevant_items = faq_service.retrieve(cid, user_text, top_k=5, threshold=0.3)
+                    faq_context = faq_service.format_knowledge_context(relevant_items)
+                    logger.info(f"Knowledge context for LLM: {faq_context[:200]}..." if faq_context else "No knowledge matched")
                 
-                # FALLBACK: If no FAQs matched but campaign has FAQs, pass them directly
+                # FALLBACK: If no matches but campaign has FAQs, pass them directly
                 if not faq_context and campaign.faqs:
-                    logger.info("No FAQ match from FAISS, passing top FAQs directly")
-                    # Format top 3 FAQs directly
+                    logger.info("No knowledge match from ChromaDB, passing top FAQs directly")
                     direct_faqs = campaign.faqs[:3]
                     faq_parts = ["Here are some relevant FAQ answers:"]
                     for i, faq in enumerate(direct_faqs, 1):
@@ -311,20 +315,25 @@ async def voice_chat_text(
     campaign_context = f"Campaign: {campaign.name}. {campaign.description or ''}"
     faq_context = ""
     
-    # AUTO-LOAD FAQs into FAISS if not already loaded
-    if not faq_service.is_campaign_loaded(request.campaign_id) and campaign.faqs:
-        logger.info(f"Auto-loading FAQs for campaign {request.campaign_id} into FAISS")
-        faq_service.load_faqs(request.campaign_id, campaign.faqs)
+    # AUTO-LOAD knowledge base if not already loaded
+    if not faq_service.is_campaign_loaded(request.campaign_id):
+        logger.info(f"Auto-loading knowledge base for campaign {request.campaign_id}")
+        faq_service.load_campaign_knowledge(
+            campaign_id=request.campaign_id,
+            name=campaign.name,
+            description=campaign.description,
+            faqs=campaign.faqs
+        )
     
-    # Retrieve relevant FAQs
+    # Retrieve relevant knowledge items (FAQs + description + name)
     if faq_service.is_campaign_loaded(request.campaign_id):
-        relevant_faqs = faq_service.retrieve(request.campaign_id, user_text, top_k=3, threshold=0.3)
-        faq_context = faq_service.format_faq_context(relevant_faqs)
-        logger.info(f"FAQ context: {faq_context[:200]}..." if faq_context else "No FAQs matched")
+        relevant_items = faq_service.retrieve(request.campaign_id, user_text, top_k=5, threshold=0.3)
+        faq_context = faq_service.format_knowledge_context(relevant_items)
+        logger.info(f"Knowledge context: {faq_context[:200]}..." if faq_context else "No knowledge matched")
     
-    # FALLBACK: If no FAQs matched but campaign has FAQs, pass them directly
+    # FALLBACK: If no matches but campaign has FAQs, pass them directly
     if not faq_context and campaign.faqs:
-        logger.info("No FAQ match, passing top FAQs directly")
+        logger.info("No knowledge match, passing top FAQs directly")
         direct_faqs = campaign.faqs[:3]
         faq_parts = ["Here are some relevant FAQ answers:"]
         for i, faq in enumerate(direct_faqs, 1):

@@ -105,9 +105,13 @@ async def create_campaign(
     await db.flush()
     await db.refresh(campaign)
     
-    # Load FAQs into retrieval service
-    if campaign.faqs:
-        faq_service.load_faqs(campaign.id, campaign.faqs)
+    # Build knowledge base (name + description + FAQs)
+    faq_service.load_campaign_knowledge(
+        campaign_id=campaign.id,
+        name=campaign.name,
+        description=campaign.description,
+        faqs=campaign.faqs
+    )
     
     return CampaignResponse(
         id=campaign.id,
@@ -188,14 +192,21 @@ async def update_campaign(
     
     if "faqs" in update_data and update_data["faqs"] is not None:
         update_data["faqs"] = [faq.model_dump() for faq in campaign_data.faqs]
-        # Reload FAQs in retrieval service
-        faq_service.load_faqs(campaign_id, update_data["faqs"])
     
     for field, value in update_data.items():
         setattr(campaign, field, value)
     
     await db.flush()
     await db.refresh(campaign)
+    
+    # Rebuild knowledge base if name, description, or FAQs changed
+    if any(k in update_data for k in ("name", "description", "faqs")):
+        faq_service.load_campaign_knowledge(
+            campaign_id=campaign.id,
+            name=campaign.name,
+            description=campaign.description,
+            faqs=campaign.faqs
+        )
     
     # Get counts
     call_count = (await db.execute(
@@ -278,8 +289,13 @@ async def upload_faqs(
     # Update FAQs
     campaign.faqs = [faq.model_dump() for faq in faqs]
     
-    # Reload in retrieval service
-    faq_service.load_faqs(campaign_id, campaign.faqs)
+    # Rebuild full knowledge base (name + description + new FAQs)
+    faq_service.load_campaign_knowledge(
+        campaign_id=campaign_id,
+        name=campaign.name,
+        description=campaign.description,
+        faqs=campaign.faqs
+    )
     
     await db.flush()
     await db.refresh(campaign)

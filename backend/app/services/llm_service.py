@@ -1,8 +1,8 @@
 """
 LLM Service
 ============
-Uses Groq Llama-3.1-70B for fast, polished Tamil voice conversations.
-Fallback chain: Groq (Llama 3.1 70B) → OpenRouter (Qwen) → Ollama (local)
+Uses Ollama gpt-oss:120b-cloud as primary LLM for voice conversations.
+Fallback chain: Ollama (gpt-oss:120b-cloud) → Ollama (llama3.1:8b)
 """
 
 import logging
@@ -18,33 +18,17 @@ logger = logging.getLogger(__name__)
 
 
 class LLMService:
-    """LLM service with OpenRouter (Qwen) primary, Groq + Ollama fallback."""
-    
-    # OpenRouter (Llama 3 70B Instruct — dialogue-optimized fallback)
-    OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-    
-    # Groq (Llama 3.3 70B — PRIMARY, fastest + best Tamil)
-    GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
-    GROQ_MODEL = "llama-3.3-70b-versatile"
+    """LLM service with Ollama gpt-oss:120b-cloud primary, llama3.1:8b fallback."""
     
     def __init__(self):
         """Initialize the LLM service."""
-        self.openrouter_key = settings.openrouter_api_key
-        self.openrouter_model = settings.openrouter_model
-        self.groq_key = settings.groq_api_key
         self.ollama_host = settings.ollama_host
-        self.ollama_model = settings.ollama_model
+        self.ollama_primary_model = settings.ollama_primary_model  # gpt-oss:120b-cloud
+        self.ollama_fallback_model = settings.ollama_model           # llama3.1:8b
         self._client: Optional[httpx.AsyncClient] = None
         
-        if self.groq_key:
-            logger.info(f"LLM Service: Groq ({self.GROQ_MODEL}) — PRIMARY")
-            if self.openrouter_key:
-                logger.info(f"LLM Service: OpenRouter ({self.openrouter_model}) — FALLBACK 1")
-            logger.info(f"LLM Service: Ollama ({self.ollama_model}) — FALLBACK 2")
-        elif self.openrouter_key:
-            logger.info(f"LLM Service: OpenRouter ({self.openrouter_model}) — PRIMARY")
-        else:
-            logger.info(f"LLM Service: Ollama ({self.ollama_model}) — PRIMARY")
+        logger.info(f"LLM Service: Ollama ({self.ollama_primary_model}) — PRIMARY")
+        logger.info(f"LLM Service: Ollama ({self.ollama_fallback_model}) — FALLBACK")
     
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -62,30 +46,27 @@ class LLMService:
     ) -> Optional[str]:
         """
         Generate a natural conversational response.
-        Tries: Groq (Llama 3.3 70B) → OpenRouter (Llama 3 70B) → Ollama (local)
+        Tries: Ollama (gpt-oss:120b-cloud) → Ollama (llama3.1:8b)
         """
-        # PRIMARY: Groq (Llama 3.1 70B) — fastest + polished Tamil
-        if self.groq_key:
-            result = await self._generate_groq(
-                user_message, language, context, faq_context, conversation_history
-            )
-            if result:
-                return result
-            logger.warning("Groq failed, trying OpenRouter fallback...")
-        
-        # Fallback 1: OpenRouter (Qwen 2.5 72B)
-        if self.openrouter_key:
-            result = await self._generate_openrouter(
-                user_message, language, context, faq_context, conversation_history
-            )
-            if result:
-                return result
-            logger.warning("OpenRouter failed, trying Ollama fallback...")
-        
-        # Fallback 2: Ollama (local)
-        return await self._generate_ollama(
-            user_message, language, context, faq_context, conversation_history
+        # PRIMARY: Ollama gpt-oss:120b-cloud
+        result = await self._generate_ollama(
+            user_message, language, context, faq_context, conversation_history,
+            model=self.ollama_primary_model
         )
+        if result:
+            return result
+        logger.warning("Ollama primary (gpt-oss:120b-cloud) failed, trying fallback...")
+        
+        # FALLBACK: Ollama llama3.1:8b
+        result = await self._generate_ollama(
+            user_message, language, context, faq_context, conversation_history,
+            model=self.ollama_fallback_model
+        )
+        if result:
+            return result
+        logger.warning("Ollama fallback (llama3.1:8b) also failed")
+        
+        return self._get_fallback_response(language)
     
     async def _generate_openrouter(
         self,
@@ -201,9 +182,11 @@ class LLMService:
         language: str,
         context: Optional[str] = None,
         faq_context: Optional[str] = None,
-        conversation_history: Optional[List[Dict[str, str]]] = None
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        model: Optional[str] = None
     ) -> Optional[str]:
-        """Generate response using local Ollama (last fallback)."""
+        """Generate response using local Ollama."""
+        model = model or self.ollama_primary_model
         try:
             client = await self._get_client()
             
@@ -212,18 +195,18 @@ class LLMService:
             )
             
             payload = {
-                "model": self.ollama_model,
+                "model": model,
                 "messages": messages,
                 "stream": False,
                 "options": {
                     "temperature": 0.85,
                     "top_p": 0.9,
-                    "num_predict": 100,
+                    "num_predict": 256,
                     "repeat_penalty": 1.2,
                 }
             }
             
-            logger.info(f"Sending request to Ollama ({self.ollama_model}) for language: {language}")
+            logger.info(f"Sending request to Ollama ({model}) for language: {language}")
             response = await client.post(
                 f"{self.ollama_host}/api/chat",
                 json=payload
@@ -233,21 +216,26 @@ class LLMService:
                 result = response.json()
                 content = result.get("message", {}).get("content", "").strip()
                 content = self._clean_for_voice(content)
-                logger.info(f"Ollama LLM response: {content[:80]}...")
+                logger.info(f"Ollama ({model}) response: {content[:80]}...")
+                # Reject empty, ellipsis-only, or too-short responses
+                stripped = content.strip('.!? \t\n')
+                if not stripped or len(stripped) < 5:
+                    logger.warning(f"Ollama ({model}) returned unusable response: '{content}'")
+                    return None
                 return content
             else:
-                logger.error(f"Ollama API error: {response.status_code} - {response.text}")
-                return self._get_fallback_response(language)
+                logger.error(f"Ollama ({model}) error: {response.status_code} - {response.text}")
+                return None
                 
         except httpx.TimeoutException:
-            logger.error("Ollama API timeout")
-            return self._get_fallback_response(language)
+            logger.error(f"Ollama ({model}) timeout")
+            return None
         except httpx.ConnectError:
-            logger.error("Cannot connect to Ollama")
-            return self._get_fallback_response(language)
+            logger.error(f"Cannot connect to Ollama for {model}")
+            return None
         except Exception as e:
-            logger.error(f"LLM generation failed: {str(e)}")
-            return self._get_fallback_response(language)
+            logger.error(f"Ollama ({model}) failed: {str(e)}")
+            return None
     
     def _build_messages(
         self,

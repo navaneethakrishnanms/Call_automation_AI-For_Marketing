@@ -1,16 +1,11 @@
 """
 Speech-to-Text Service
 ======================
-ALWAYS PARALLEL DUAL-ENGINE:
-  - Run BOTH Whisper (Groq) AND Sarvam on EVERY turn
+PARALLEL DUAL-ENGINE (Sarvam PRIMARY):
+  - Run BOTH Sarvam AND Whisper (Groq) on EVERY turn
+  - Sarvam ASR v3 = PRIMARY (best for Tamil + Indian English)
+  - Whisper = SECONDARY/FALLBACK (used when Sarvam transliterates English)
   - Smart pick: detect transliteration, prefer correct result
-  - Prevents Sarvam from transliterating English → Tamil script
-
-Why always parallel?
-  - Sarvam with ta-IN transliterates English speech into Tamil script
-    e.g., "your college" → "யுவர் காலேஜ்" — WRONG
-  - Whisper keeps English as English — correct
-  - By always running both, we pick the best result
 """
 
 import io
@@ -74,9 +69,9 @@ def _is_transliterated_english(text: str) -> bool:
 
 class STTService:
     """
-    ALWAYS-PARALLEL dual-engine STT:
-      - Every turn: run BOTH Whisper + Sarvam
-      - Pick best result with transliteration detection
+    PARALLEL dual-engine STT — Sarvam PRIMARY, Whisper SECONDARY:
+      - Every turn: run BOTH Sarvam + Whisper
+      - Prefer Sarvam unless it transliterates English
     """
     
     WHISPER_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
@@ -89,10 +84,10 @@ class STTService:
         self.sarvam_key = settings.sarvam_api_key
         self._client: Optional[httpx.AsyncClient] = None
         
-        logger.info("STT Service initialized (Always-Parallel Dual-Engine)")
-        logger.info(f"  Engine 1: Whisper V3 Turbo via Groq")
-        logger.info(f"  Engine 2: Sarvam ASR v3")
-        logger.info(f"  Strategy: ALWAYS run both, pick best with transliteration detection")
+        logger.info("STT Service initialized (Sarvam PRIMARY, Whisper SECONDARY)")
+        logger.info(f"  Engine 1 (PRIMARY): Sarvam ASR v3")
+        logger.info(f"  Engine 2 (FALLBACK): Whisper V3 Turbo via Groq")
+        logger.info(f"  Strategy: Run both parallel, prefer Sarvam unless transliteration detected")
     
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
@@ -131,8 +126,8 @@ class STTService:
             logger.info(f"STT skipped: {reason}")
             return None
         
-        # ALWAYS run both engines in parallel
-        logger.info("🎯 STT: Running BOTH Whisper + Sarvam in parallel (always)")
+        # ALWAYS run both engines in parallel, prefer Sarvam
+        logger.info("🎯 STT: Running Sarvam (PRIMARY) + Whisper (SECONDARY) in parallel")
         return await self._transcribe_parallel(audio_bytes, filename, language_hint)
     
     async def _transcribe_parallel(
@@ -142,7 +137,7 @@ class STTService:
         language_hint: Optional[str] = None
     ) -> Optional[str]:
         """
-        Run both engines, pick best result with transliteration detection.
+        Run both engines in parallel. Sarvam is PRIMARY, Whisper is SECONDARY.
         """
         try:
             whisper_task = asyncio.create_task(
@@ -168,41 +163,38 @@ class STTService:
             
             logger.info(
                 f"Parallel results — "
-                f"Whisper: '{(whisper_text or '')[:60]}' (conf={whisper_confidence:.2f}), "
-                f"Sarvam: '{(sarvam_text or '')[:60]}'"
+                f"Sarvam (PRIMARY): '{(sarvam_text or '')[:60]}', "
+                f"Whisper (SECONDARY): '{(whisper_text or '')[:60]}' (conf={whisper_confidence:.2f})"
             )
             
-            # === SMART DECISION LOGIC ===
+            # === SARVAM-FIRST DECISION LOGIC ===
             
-            # Case 1: Sarvam returned transliterated English → use Whisper
+            # Case 1: Sarvam returned transliterated English → fall back to Whisper
             if sarvam_text and _is_transliterated_english(sarvam_text):
                 if whisper_text:
-                    logger.info("→ Sarvam transliterated English! Using Whisper instead.")
+                    logger.info("→ Sarvam transliterated English! Falling back to Whisper.")
                     return whisper_text
             
-            # Case 2: Sarvam has real Tamil text (Tamil script, not transliteration)
-            if sarvam_text and TAMIL_SCRIPT_RE.search(sarvam_text) and not _is_transliterated_english(sarvam_text):
-                logger.info("→ Using Sarvam (genuine Tamil detected)")
+            # Case 2: Sarvam has valid result → use it (PRIMARY)
+            if sarvam_text:
+                logger.info("→ Using Sarvam (PRIMARY engine)")
                 return sarvam_text
             
-            # Case 3: Whisper has high confidence → trust it
-            if whisper_text and whisper_confidence >= 0.7:
-                logger.info("→ Using Whisper (high confidence)")
+            # Case 3: Sarvam failed, use Whisper as fallback
+            if whisper_text:
+                logger.info("→ Sarvam failed, using Whisper (FALLBACK)")
                 return whisper_text
             
-            # Case 4: Both have results, prefer longer one
-            if whisper_text and sarvam_text:
-                if len(sarvam_text) > len(whisper_text) * 1.3:
-                    logger.info("→ Using Sarvam (richer transcription)")
-                    return sarvam_text
-                logger.info("→ Using Whisper (default)")
-                return whisper_text
-            
-            # Case 5: Whatever succeeded
-            return whisper_text or sarvam_text
+            # Case 4: Both failed
+            logger.warning("Both STT engines failed")
+            return None
             
         except Exception as e:
             logger.error(f"Parallel transcription error: {e}")
+            # Emergency fallback: try Sarvam alone first, then Whisper
+            sarvam_result = await self._transcribe_sarvam(audio_bytes, language_hint)
+            if sarvam_result:
+                return sarvam_result
             result, _ = await self._transcribe_whisper(audio_bytes, filename)
             return result
     
@@ -338,10 +330,10 @@ class STTService:
     
     async def health_check(self) -> dict:
         return {
-            "routing": "always_parallel_dual_engine",
-            "engine_1": "whisper_v3_turbo",
-            "engine_2": "sarvam_asr_v3",
-            "strategy": "always_parallel + transliteration_detection",
+            "routing": "parallel_sarvam_primary",
+            "primary": "sarvam_asr_v3",
+            "secondary": "whisper_v3_turbo",
+            "strategy": "always_parallel + sarvam_preferred + transliteration_detection",
             "groq_configured": bool(self.groq_key),
             "sarvam_configured": bool(self.sarvam_key),
         }

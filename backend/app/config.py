@@ -19,18 +19,19 @@ class Settings(BaseSettings):
     twilio_auth_token: str = ""
     twilio_phone_number: str = ""
     
-    # Groq (for Whisper STT)
+    # Groq (Whisper STT — secondary/fallback)
     groq_api_key: str = ""
     
-    # Sarvam AI (TTS for all languages)
+    # Sarvam AI (STT primary + TTS)
     sarvam_api_key: str = ""
     
-    # OpenRouter (Qwen LLM - primary)
+    # OpenRouter (no longer used for LLM)
     openrouter_api_key: str = ""
     openrouter_model: str = "qwen/qwen2.5-vl-72b-instruct"
     
-    # Ollama (Local LLM - fallback)
+    # Ollama (Primary + Fallback LLM)
     ollama_host: str = "http://localhost:11434"
+    ollama_primary_model: str = "gpt-oss:120b-cloud"
     ollama_model: str = "llama3.1:8b"
     
     # Application
