@@ -46,6 +46,7 @@ export const callsAPI = {
     initiate: (data) => api.post('/calls/initiate', data),
     end: (id) => api.post(`/calls/${id}/end`),
     processText: (id, text) => api.post(`/calls/${id}/process-text`, null, { params: { text } }),
+    retellCall: (data) => api.post('/calls/retell-call', typeof data === 'string' ? { phone_number: data } : data),
 }
 
 // Lead APIs
@@ -73,6 +74,20 @@ export const testAPI = {
     call: (phone_number, message) => api.post('/test/call', { phone_number, message }),
     llm: (text, campaign_context) => api.post('/test/llm', { text, campaign_context }),
     tts: (text, language) => api.post('/test/tts', { text, language }),
+}
+
+// Bulk Call APIs (Retell AI — proxied to bulk-call-service on port 3001)
+export const bulkCallAPI = {
+    upload: (formData) =>
+        api.post('/bulk-call/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 300000,
+            baseURL: '/bulk-api',
+        }),
+    intentHistory: () => api.get('/intent-history', { baseURL: '/bulk-api' }),
+    classifyIntent: (callId, phone, name) =>
+        api.get(`/intent/${callId}`, { baseURL: '/bulk-api', params: { phone, name }, timeout: 360000 }),
+    downloadCSVUrl: '/bulk-api/download-intent-csv',
 }
 
 export default api

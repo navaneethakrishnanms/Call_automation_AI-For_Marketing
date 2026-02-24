@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     ollama_primary_model: str = "gpt-oss:120b-cloud"
     ollama_model: str = "llama3.1:8b"
     
+    # Retell AI
+    retell_api_key: str = ""
+    retell_agent_id: str = ""
+    retell_phone_number: str = ""
+    
     # Application
     debug: bool = True
     cors_origins: str = "http://localhost:3000,http://localhost:5173"

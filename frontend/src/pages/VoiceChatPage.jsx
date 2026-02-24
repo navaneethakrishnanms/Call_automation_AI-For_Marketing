@@ -159,11 +159,25 @@ function VoiceChatPage() {
             setPipelineInfo(info)
         }
 
-        setMessages(prev => [
-            ...prev,
-            ...(skipUserMessage ? [] : []),
-            { role: 'assistant', content: data.text_response, language: data.detected_language, timestamp: new Date() }
-        ])
+        // Build new messages: add user's transcribed voice text + assistant response
+        const newMessages = []
+
+        if (!skipUserMessage && data.pipeline_info?.user_transcript) {
+            newMessages.push({
+                role: 'user',
+                content: data.pipeline_info.user_transcript,
+                timestamp: new Date()
+            })
+        }
+
+        newMessages.push({
+            role: 'assistant',
+            content: data.text_response,
+            language: data.detected_language,
+            timestamp: new Date()
+        })
+
+        setMessages(prev => [...prev, ...newMessages])
 
         if (audioEnabled && data.audio_base64 && audioRef.current) {
             const audioUrl = `data:audio/wav;base64,${data.audio_base64}`

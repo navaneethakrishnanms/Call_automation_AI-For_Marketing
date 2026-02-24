@@ -6,6 +6,7 @@ import CallsPage from './pages/CallsPage'
 import LeadsPage from './pages/LeadsPage'
 import AnalyticsPage from './pages/AnalyticsPage'
 import VoiceChatPage from './pages/VoiceChatPage'
+import BulkCallPage from './pages/BulkCallPage'
 
 function App() {
     return (
@@ -15,6 +16,7 @@ function App() {
                 <Route path="/voice-chat" element={<VoiceChatPage />} />
                 <Route path="/campaigns" element={<CampaignsPage />} />
                 <Route path="/calls" element={<CallsPage />} />
+                <Route path="/bulk-calls" element={<BulkCallPage />} />
                 <Route path="/leads" element={<LeadsPage />} />
                 <Route path="/analytics" element={<AnalyticsPage />} />
             </Routes>
@@ -23,3 +25,4 @@ function App() {
 }
 
 export default App
+

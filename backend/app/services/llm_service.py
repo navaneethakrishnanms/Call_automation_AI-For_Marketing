@@ -18,22 +18,28 @@ logger = logging.getLogger(__name__)
 
 
 class LLMService:
-    """LLM service with Ollama gpt-oss:120b-cloud primary, llama3.1:8b fallback."""
+    """LLM service with Groq primary, Ollama fallback."""
+    
+    GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
+    GROQ_MODEL = "llama-3.3-70b-versatile"
     
     def __init__(self):
         """Initialize the LLM service."""
         self.ollama_host = settings.ollama_host
         self.ollama_primary_model = settings.ollama_primary_model  # gpt-oss:120b-cloud
         self.ollama_fallback_model = settings.ollama_model           # llama3.1:8b
+        self.groq_key = getattr(settings, 'groq_api_key', None)
         self._client: Optional[httpx.AsyncClient] = None
         
-        logger.info(f"LLM Service: Ollama ({self.ollama_primary_model}) — PRIMARY")
-        logger.info(f"LLM Service: Ollama ({self.ollama_fallback_model}) — FALLBACK")
+        if self.groq_key:
+            logger.info(f"LLM Service: Groq ({self.GROQ_MODEL}) — PRIMARY")
+        logger.info(f"LLM Service: Ollama ({self.ollama_primary_model}) — FALLBACK 1")
+        logger.info(f"LLM Service: Ollama ({self.ollama_fallback_model}) — FALLBACK 2")
     
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
         if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=120.0)
+            self._client = httpx.AsyncClient(timeout=60.0)
         return self._client
     
     async def generate_response(
@@ -46,25 +52,34 @@ class LLMService:
     ) -> Optional[str]:
         """
         Generate a natural conversational response.
-        Tries: Ollama (gpt-oss:120b-cloud) → Ollama (llama3.1:8b)
+        Tries: Groq (cloud, fast) → Ollama primary → Ollama fallback
         """
-        # PRIMARY: Ollama gpt-oss:120b-cloud
+        # PRIMARY: Groq (cloud — fast and always available)
+        if self.groq_key:
+            result = await self._generate_groq(
+                user_message, language, context, faq_context, conversation_history
+            )
+            if result:
+                return result
+            logger.warning("Groq failed, trying Ollama...")
+        
+        # FALLBACK 1: Ollama gpt-oss:120b-cloud
         result = await self._generate_ollama(
             user_message, language, context, faq_context, conversation_history,
             model=self.ollama_primary_model
         )
         if result:
             return result
-        logger.warning("Ollama primary (gpt-oss:120b-cloud) failed, trying fallback...")
+        logger.warning("Ollama primary failed, trying fallback model...")
         
-        # FALLBACK: Ollama llama3.1:8b
+        # FALLBACK 2: Ollama llama3.1:8b
         result = await self._generate_ollama(
             user_message, language, context, faq_context, conversation_history,
             model=self.ollama_fallback_model
         )
         if result:
             return result
-        logger.warning("Ollama fallback (llama3.1:8b) also failed")
+        logger.warning("All LLM backends failed")
         
         return self._get_fallback_response(language)
     
@@ -346,19 +361,6 @@ class LLMService:
     
     async def health_check(self) -> bool:
         """Check if LLM services are accessible."""
-        if self.openrouter_key:
-            try:
-                client = await self._get_client()
-                response = await client.get(
-                    "https://openrouter.ai/api/v1/models",
-                    headers={"Authorization": f"Bearer {self.openrouter_key}"}
-                )
-                if response.status_code == 200:
-                    logger.info("OpenRouter health check: OK")
-                    return True
-            except Exception as e:
-                logger.error(f"OpenRouter health check failed: {e}")
-        
         if self.groq_key:
             try:
                 client = await self._get_client()
@@ -367,9 +369,20 @@ class LLMService:
                     headers={"Authorization": f"Bearer {self.groq_key}"}
                 )
                 if response.status_code == 200:
+                    logger.info("Groq health check: OK")
                     return True
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Groq health check failed: {e}")
+        
+        # Check Ollama
+        try:
+            client = await self._get_client()
+            response = await client.get(f"{self.ollama_host}/api/tags")
+            if response.status_code == 200:
+                logger.info("Ollama health check: OK")
+                return True
+        except Exception:
+            pass
         
         return False
     

@@ -8,7 +8,8 @@ import {
     Sparkles,
     Menu,
     X,
-    Mic
+    Mic,
+    Upload
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -17,6 +18,7 @@ const navItems = [
     { path: '/voice-chat', label: 'Voice Chat', icon: Mic },
     { path: '/campaigns', label: 'Campaigns', icon: Megaphone },
     { path: '/calls', label: 'Calls', icon: Phone },
+    { path: '/bulk-calls', label: 'Bulk Calls', icon: Upload },
     { path: '/leads', label: 'Leads', icon: Users },
     { path: '/analytics', label: 'Analytics', icon: BarChart3 },
 ]

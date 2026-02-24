@@ -11,13 +11,14 @@ import {
     User,
     Calendar,
     Edit2,
+    Trash2,
     X,
     ChevronLeft,
     ChevronRight,
     Download,
     Plus
 } from 'lucide-react'
-import { leadsAPI, campaignsAPI, callsAPI, testAPI } from '../api/client'
+import { leadsAPI, campaignsAPI, callsAPI, testAPI, bulkCallAPI } from '../api/client'
 import { formatDate, formatPhoneNumber, getQualificationBadge } from '../utils/formatters'
 
 function LeadsPage() {
@@ -30,6 +31,8 @@ function LeadsPage() {
     const [activeTab, setActiveTab] = useState('')
     const [selectedLead, setSelectedLead] = useState(null)
     const [showCreateModal, setShowCreateModal] = useState(false)
+    const [callingLead, setCallingLead] = useState(null)
+    const [intentResult, setIntentResult] = useState(null)
 
     useEffect(() => {
         fetchCampaigns()
@@ -87,6 +90,20 @@ function LeadsPage() {
         }
     }
 
+    async function handleDeleteLead(lead) {
+        if (!confirm(`Delete lead "${lead.name || lead.phone}"? This cannot be undone.`)) {
+            return
+        }
+        try {
+            await leadsAPI.delete(lead.id)
+            fetchLeads()
+            fetchStats()
+        } catch (error) {
+            console.error('Failed to delete lead:', error)
+            alert('Failed to delete lead.')
+        }
+    }
+
     async function handleCreateLead(data) {
         try {
             await leadsAPI.create(data)
@@ -104,25 +121,37 @@ function LeadsPage() {
             return
         }
 
-        const campaign = campaigns.find(c => c.id === lead.campaign_id)
-
-        if (!confirm(`Call ${lead.name || lead.phone}?`)) {
+        if (!confirm(`Call ${lead.name || lead.phone} via Retell AI?\n\nAfter the call ends, intent will be classified automatically.`)) {
             return
         }
 
+        setCallingLead(lead)
+        setIntentResult(null)
+
         try {
-            // Use test API for database-free calling
-            const message = `Hello! This is a call from ${campaign?.name || 'Marketing AI'}. We are reaching out regarding our services.`
-            const result = await testAPI.call(lead.phone, message)
+            const result = await callsAPI.retellCall({ phone_number: lead.phone, campaign_id: lead.campaign_id })
 
             if (result.status === 'success') {
-                alert(`Call initiated! Call SID: ${result.call_sid}`)
+                // Now poll for intent classification
+                try {
+                    const intent = await bulkCallAPI.classifyIntent(
+                        result.call_id,
+                        lead.phone,
+                        lead.name || 'Unknown'
+                    )
+                    setIntentResult(intent)
+                } catch (intentErr) {
+                    console.error('Intent classification failed:', intentErr)
+                    setIntentResult({ intent: 'Classification failed', confidence_score: 0, note: intentErr.message })
+                }
             } else {
                 alert(`Call failed: ${result.message}`)
+                setCallingLead(null)
             }
         } catch (error) {
-            console.error('Failed to initiate call:', error)
+            console.error('Failed to initiate Retell call:', error)
             alert('Failed to initiate call. Check console for details.')
+            setCallingLead(null)
         }
     }
 
@@ -285,6 +314,13 @@ function LeadsPage() {
                                                         >
                                                             <Edit2 className="w-4 h-4" />
                                                         </button>
+                                                        <button
+                                                            onClick={() => handleDeleteLead(lead)}
+                                                            className="btn-icon bg-red-500/20 hover:bg-red-500/30 text-red-400"
+                                                            title="Delete Lead"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -330,6 +366,85 @@ function LeadsPage() {
             )}
 
             {/* Create Lead Modal */}
+            {/* Intent Classification Modal */}
+            {callingLead && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+                    <div className="glass-card p-8 max-w-md w-full mx-4 text-center">
+                        {!intentResult ? (
+                            <>
+                                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary-500/20 flex items-center justify-center">
+                                    <Phone className="w-8 h-8 text-primary-400 animate-pulse" />
+                                </div>
+                                <h3 className="text-xl font-bold text-white mb-2">
+                                    Calling {callingLead.name || callingLead.phone}
+                                </h3>
+                                <p className="text-white/50 text-sm mb-4">
+                                    Waiting for call to finish and classifying intent...
+                                </p>
+                                <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                                    <div className="h-full bg-gradient-to-r from-primary-500 to-accent-500 rounded-full animate-pulse" style={{ width: '70%' }} />
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                                    <span className="text-3xl">🎯</span>
+                                </div>
+                                <h3 className="text-xl font-bold text-white mb-1">
+                                    Intent Classified
+                                </h3>
+                                <p className="text-white/40 text-sm mb-4">{callingLead.name || callingLead.phone}</p>
+                                <div className="mb-4">
+                                    <span className={`inline-block px-4 py-2 rounded-xl text-sm font-semibold border ${intentResult.intent === 'Highly Interested' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' :
+                                        intentResult.intent === 'Interested' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' :
+                                            intentResult.intent === 'Needs Follow-up' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
+                                                intentResult.intent === 'Just Exploring' ? 'bg-slate-500/20 text-slate-300 border-slate-500/30' :
+                                                    intentResult.intent === 'Not Interested' ? 'bg-red-500/20 text-red-300 border-red-500/30' :
+                                                        'bg-white/10 text-white/60 border-white/20'
+                                        }`}>
+                                        {intentResult.intent}
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-center gap-3 mb-6">
+                                    <div className="w-24 h-2 bg-white/10 rounded-full overflow-hidden">
+                                        <div
+                                            className={`h-full rounded-full ${intentResult.confidence_score >= 80 ? 'bg-emerald-400' :
+                                                intentResult.confidence_score >= 60 ? 'bg-blue-400' :
+                                                    intentResult.confidence_score >= 40 ? 'bg-amber-400' : 'bg-red-400'
+                                                }`}
+                                            style={{ width: `${intentResult.confidence_score}%` }}
+                                        />
+                                    </div>
+                                    <span className="text-white/50 text-sm">{intentResult.confidence_score}% confidence</span>
+                                </div>
+                                {intentResult.note && (
+                                    <p className="text-white/40 text-xs mb-2">{intentResult.note}</p>
+                                )}
+                                {intentResult.description && (
+                                    <p className="text-white/60 text-sm mb-4 px-4 leading-relaxed">{intentResult.description}</p>
+                                )}
+                                <div className="flex flex-col gap-3">
+                                    <button
+                                        onClick={() => { setCallingLead(null); setIntentResult(null); }}
+                                        className="btn-primary w-full"
+                                    >
+                                        Close
+                                    </button>
+                                    <a
+                                        href={bulkCallAPI.downloadCSVUrl}
+                                        download
+                                        className="btn-secondary w-full flex items-center justify-center gap-2 hover:bg-violet-500/10 hover:border-violet-500/30 text-violet-300"
+                                    >
+                                        <Download className="w-4 h-4" />
+                                        Download All Intent Results (CSV)
+                                    </a>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {showCreateModal && (
                 <LeadCreateModal
                     campaigns={campaigns}

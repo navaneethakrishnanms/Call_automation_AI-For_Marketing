@@ -15,7 +15,7 @@ import {
     AreaChart,
     Area
 } from 'recharts'
-import { Calendar, Globe } from 'lucide-react'
+import { Calendar, Globe, Download } from 'lucide-react'
 import { analyticsAPI, campaignsAPI } from '../api/client'
 
 function AnalyticsPage() {
@@ -110,6 +110,16 @@ function AnalyticsPage() {
                             <option value={30}>Last 30 Days</option>
                             <option value={90}>Last 90 Days</option>
                         </select>
+                    </div>
+                    <div className="flex items-end">
+                        <a
+                            href="/bulk-api/download-intent-csv"
+                            download
+                            className="btn-secondary flex items-center gap-2 bg-violet-500/10 hover:bg-violet-500/20 text-violet-300 border-violet-500/20"
+                        >
+                            <Download className="w-4 h-4" />
+                            Download Intent CSV
+                        </a>
                     </div>
                 </div>
             </div>

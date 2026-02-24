@@ -6,6 +6,7 @@ API endpoints for call management and initiation.
 from typing import Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -267,3 +268,29 @@ async def process_text_input(
         "response": response,
         "call_id": call_id
     }
+
+
+class RetellCallRequest(BaseModel):
+    """Request schema for initiating a Retell AI call."""
+    phone_number: str
+    agent_id: Optional[str] = None
+    campaign_id: Optional[int] = None
+
+
+@router.post("/retell-call")
+async def retell_call(request: RetellCallRequest, db: AsyncSession = Depends(get_db)):
+    """Initiate an outbound call using Retell AI."""
+    from app.services.retell_service import create_retell_call
+
+    # Resolve agent_id: explicit > campaign > .env fallback
+    agent_id = request.agent_id
+    if not agent_id and request.campaign_id:
+        campaign_result = await db.execute(
+            select(Campaign).where(Campaign.id == request.campaign_id)
+        )
+        campaign = campaign_result.scalar_one_or_none()
+        if campaign and campaign.agent_id:
+            agent_id = campaign.agent_id
+
+    result = await create_retell_call(to_number=request.phone_number, agent_id=agent_id)
+    return result

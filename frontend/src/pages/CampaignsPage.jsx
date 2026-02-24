@@ -184,6 +184,7 @@ function CampaignModal({ campaign, onClose, onSave }) {
     const [formData, setFormData] = useState({
         name: campaign?.name || '',
         description: campaign?.description || '',
+        agent_id: campaign?.agent_id || '',
         greeting_message: campaign?.greeting_message || "Hello! Thank you for your interest. How can I help you today?",
         farewell_message: campaign?.farewell_message || "Thank you for calling! Have a wonderful day!",
         is_active: campaign?.is_active ?? true,
@@ -266,6 +267,19 @@ function CampaignModal({ campaign, onClose, onSave }) {
                             rows={3}
                             className="input-field resize-none"
                         />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm text-white/70 mb-2">Retell Agent ID</label>
+                        <input
+                            type="text"
+                            name="agent_id"
+                            value={formData.agent_id}
+                            onChange={handleChange}
+                            placeholder="e.g. agent_3dbc918b7f0fc37d38b850ad0c"
+                            className="input-field"
+                        />
+                        <p className="text-xs text-white/40 mt-1">The Retell AI agent to use for calls in this campaign</p>
                     </div>
 
                     <div>

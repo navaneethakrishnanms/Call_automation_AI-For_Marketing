@@ -2,6 +2,7 @@
 .env
 .env.local
 .env.*.local
+**/.env
 
 # Dependencies
 node_modules/
@@ -36,6 +37,7 @@ logs/
 *.db
 *.sqlite
 *.sqlite3
+**/*.sqlite
 
 # Build artifacts
 frontend/dist/
@@ -53,3 +55,7 @@ htmlcov/
 # Misc
 *.bak
 *.tmp
+backend/backend_debug.txt
+backend/debug_output.txt
+git_status.txt
+git_status_output.txt

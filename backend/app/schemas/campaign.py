@@ -19,6 +19,7 @@ class CampaignBase(BaseModel):
     """Base campaign schema."""
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
+    agent_id: Optional[str] = Field(None, max_length=100, description="Retell AI Agent ID for this campaign")
     greeting_message: Optional[str] = "Hello! Thank you for your interest. How can I help you today?"
     farewell_message: Optional[str] = "Thank you for calling! Have a wonderful day!"
 
@@ -32,6 +33,7 @@ class CampaignUpdate(BaseModel):
     """Schema for updating a campaign."""
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
+    agent_id: Optional[str] = Field(None, max_length=100)
     greeting_message: Optional[str] = None
     farewell_message: Optional[str] = None
     is_active: Optional[bool] = None

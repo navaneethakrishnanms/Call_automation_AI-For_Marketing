@@ -20,7 +20,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 # Audio debounce settings
-MIN_AUDIO_BYTES = 3000  # ~500ms
+MIN_AUDIO_BYTES = 1000  # Lowered — webm compresses heavily
 
 # Tamil script Unicode range
 TAMIL_SCRIPT_RE = re.compile(r'[\u0B80-\u0BFF]')
@@ -97,19 +97,10 @@ class STTService:
     def _should_skip(self, audio_bytes: bytes) -> Tuple[bool, str]:
         if len(audio_bytes) < MIN_AUDIO_BYTES:
             return True, f"too_short ({len(audio_bytes)} bytes)"
-        if self._is_silence(audio_bytes):
-            return True, "silence"
+        # NOTE: Skip silence detection for compressed formats (webm/opus).
+        # Compressed bytes have uniform entropy regardless of audio content,
+        # making raw-byte variance checks meaningless.
         return False, ""
-    
-    def _is_silence(self, audio_bytes: bytes) -> bool:
-        if len(audio_bytes) < 1000:
-            return True
-        sample = audio_bytes[100:1100]
-        if not sample:
-            return True
-        avg = sum(sample) / len(sample)
-        variance = sum((b - avg) ** 2 for b in sample) / len(sample)
-        return variance < 50
     
     async def transcribe_bytes(
         self,
@@ -284,7 +275,8 @@ class STTService:
             }
             lang_code = lang_code_map.get(language_hint, "unknown")
             
-            files = {"file": ("audio.wav", io.BytesIO(audio_bytes), "audio/wav")}
+            # Send with correct content type — browser records webm/opus
+            files = {"file": ("audio.webm", io.BytesIO(audio_bytes), "audio/webm")}
             data = {
                 "language_code": lang_code,
                 "model": "saaras:v3",

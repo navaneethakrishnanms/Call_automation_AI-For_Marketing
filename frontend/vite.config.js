@@ -12,6 +12,10 @@ export default defineConfig({
                 target: 'http://localhost:8000',
                 changeOrigin: true,
             },
+            '/bulk-api': {
+                target: 'http://localhost:3001',
+                changeOrigin: true,
+            },
         },
     },
     build: {
@@ -19,3 +23,4 @@ export default defineConfig({
         sourcemap: false,
     },
 })
+
