@@ -4,29 +4,33 @@ import {
     Megaphone,
     Phone,
     Users,
-    BarChart3,
     Sparkles,
     Menu,
-    X,
+    LogOut,
     Mic,
-    Upload
+    Upload,
+    PhoneCall,
+    MessageSquare
 } from 'lucide-react'
 import { useState } from 'react'
+import { useAuth } from '../../shared/contexts/AuthContext'
 
-const navItems = [
-    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/voice-chat', label: 'Voice Chat', icon: Mic },
-    { path: '/campaigns', label: 'Campaigns', icon: Megaphone },
-    { path: '/calls', label: 'Calls', icon: Phone },
-    { path: '/bulk-calls', label: 'Bulk Calls', icon: Upload },
-    { path: '/leads', label: 'Leads', icon: Users },
-    { path: '/analytics', label: 'Analytics', icon: BarChart3 },
+const adminNavItems = [
+    { path: '/admin', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/admin/campaigns', label: 'Campaigns', icon: Megaphone },
+    { path: '/admin/calls', label: 'Calls', icon: Phone },
+    { path: '/admin/bulk-calls', label: 'Bulk Calls', icon: Upload },
+    { path: '/admin/leads', label: 'Leads', icon: Users },
+    { path: '/admin/call-requests', label: 'Call Requests', icon: PhoneCall },
+    { path: '/admin/feedback', label: 'Feedback', icon: MessageSquare },
 ]
 
-function Layout({ children }) {
+function AdminLayout({ children }) {
     const [sidebarOpen, setSidebarOpen] = useState(false)
     const location = useLocation()
+    const { user, logout } = useAuth()
 
+    const navItems = adminNavItems
     const currentPage = navItems.find(item => item.path === location.pathname)?.label || 'Dashboard'
 
     return (
@@ -55,17 +59,18 @@ function Layout({ children }) {
                         </div>
                         <div>
                             <h1 className="font-bold text-lg gradient-text">Marketing AI</h1>
-                            <p className="text-xs text-white/50">Call Automation</p>
+                            <p className="text-xs text-white/50 capitalize">Admin Portal</p>
                         </div>
                     </div>
                 </div>
 
                 {/* Navigation */}
-                <nav className="flex-1 p-4 space-y-2">
+                <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
                     {navItems.map(({ path, label, icon: Icon }) => (
                         <NavLink
                             key={path}
                             to={path}
+                            end={path === '/admin'}
                             onClick={() => setSidebarOpen(false)}
                             className={({ isActive }) => `
                 sidebar-link
@@ -79,14 +84,16 @@ function Layout({ children }) {
                 </nav>
 
                 {/* Footer */}
-                <div className="p-4 border-t border-white/10">
-                    <div className="glass-card p-4 bg-gradient-to-br from-primary-500/10 to-accent-500/10">
-                        <p className="text-xs text-white/60 mb-2">AI Status</p>
-                        <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                            <span className="text-sm text-white/80">All systems online</span>
-                        </div>
-                    </div>
+                <div className="p-4 border-t border-white/10 space-y-4">
+                    <button 
+                        onClick={logout}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors"
+                    >
+                        <LogOut className="w-4 h-4" />
+                        Logout
+                    </button>
+                    
+
                 </div>
             </aside>
 
@@ -116,10 +123,6 @@ function Layout({ children }) {
                         </div>
 
                         <div className="flex items-center gap-3">
-                            <div className="hidden sm:flex items-center gap-2 px-4 py-2 glass-card">
-                                <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                                <span className="text-sm text-white/70">Connected</span>
-                            </div>
                         </div>
                     </div>
                 </header>
@@ -135,4 +138,4 @@ function Layout({ children }) {
     )
 }
 
-export default Layout
+export default AdminLayout

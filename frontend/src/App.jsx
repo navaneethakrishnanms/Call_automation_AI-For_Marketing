@@ -1,28 +1,113 @@
-import { Routes, Route } from 'react-router-dom'
-import Layout from './components/Layout/Layout'
-import DashboardPage from './pages/DashboardPage'
-import CampaignsPage from './pages/CampaignsPage'
-import CallsPage from './pages/CallsPage'
-import LeadsPage from './pages/LeadsPage'
-import AnalyticsPage from './pages/AnalyticsPage'
-import VoiceChatPage from './pages/VoiceChatPage'
-import BulkCallPage from './pages/BulkCallPage'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import AdminLayout from './admin/layouts/AdminLayout'
+import UserLayout from './user/layouts/UserLayout'
+
+// Admin Pages
+import DashboardPage from './admin/pages/DashboardPage'
+import CampaignsPage from './admin/pages/CampaignsPage'
+import CallsPage from './admin/pages/CallsPage'
+import LeadsPage from './admin/pages/LeadsPage'
+import BulkCallPage from './admin/pages/BulkCallPage'
+import CallRequestsPage from './admin/pages/CallRequestsPage'
+import FeedbackAdminPage from './admin/pages/FeedbackAdminPage'
+
+// User Pages
+import UserHomePage from './user/pages/UserHomePage'
+import UserVoiceChatPage from './user/pages/UserVoiceChatPage'
+import UserFeedbackPage from './user/pages/UserFeedbackPage'
+
+// Shared
+import LoginPage from './shared/pages/LoginPage'
+import { AuthProvider } from './shared/contexts/AuthContext'
+import { ProtectedRoute } from './shared/components/ProtectedRoute'
 
 function App() {
     return (
-        <Layout>
+        <AuthProvider>
             <Routes>
-                <Route path="/" element={<DashboardPage />} />
-                <Route path="/voice-chat" element={<VoiceChatPage />} />
-                <Route path="/campaigns" element={<CampaignsPage />} />
-                <Route path="/calls" element={<CallsPage />} />
-                <Route path="/bulk-calls" element={<BulkCallPage />} />
-                <Route path="/leads" element={<LeadsPage />} />
-                <Route path="/analytics" element={<AnalyticsPage />} />
+                {/* Public Route */}
+                <Route path="/login" element={<LoginPage />} />
+                
+                {/* Admin Routes */}
+                <Route path="/admin" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                        <AdminLayout>
+                            <DashboardPage />
+                        </AdminLayout>
+                    </ProtectedRoute>
+                } />
+                <Route path="/admin/campaigns" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                        <AdminLayout>
+                            <CampaignsPage />
+                        </AdminLayout>
+                    </ProtectedRoute>
+                } />
+                <Route path="/admin/calls" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                        <AdminLayout>
+                            <CallsPage />
+                        </AdminLayout>
+                    </ProtectedRoute>
+                } />
+                <Route path="/admin/bulk-calls" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                        <AdminLayout>
+                            <BulkCallPage />
+                        </AdminLayout>
+                    </ProtectedRoute>
+                } />
+                <Route path="/admin/leads" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                        <AdminLayout>
+                            <LeadsPage />
+                        </AdminLayout>
+                    </ProtectedRoute>
+                } />
+                <Route path="/admin/call-requests" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                        <AdminLayout>
+                            <CallRequestsPage />
+                        </AdminLayout>
+                    </ProtectedRoute>
+                } />
+                <Route path="/admin/feedback" element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                        <AdminLayout>
+                            <FeedbackAdminPage />
+                        </AdminLayout>
+                    </ProtectedRoute>
+                } />
+
+                {/* User Routes */}
+                <Route path="/request-call" element={
+                    <ProtectedRoute allowedRoles={['user']}>
+                        <UserLayout>
+                            <UserHomePage />
+                        </UserLayout>
+                    </ProtectedRoute>
+                } />
+                <Route path="/user/voice-chat" element={
+                    <ProtectedRoute allowedRoles={['user']}>
+                        <UserLayout>
+                            <UserVoiceChatPage />
+                        </UserLayout>
+                    </ProtectedRoute>
+                } />
+                <Route path="/user/feedback" element={
+                    <ProtectedRoute allowedRoles={['user']}>
+                        <UserLayout>
+                            <UserFeedbackPage />
+                        </UserLayout>
+                    </ProtectedRoute>
+                } />
+
+                {/* Default Redirect */}
+                <Route path="/" element={<Navigate to="/login" replace />} />
+                <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>
-        </Layout>
+        </AuthProvider>
     )
 }
 
 export default App
-

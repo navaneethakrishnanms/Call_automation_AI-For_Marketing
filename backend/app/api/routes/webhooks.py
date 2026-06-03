@@ -169,15 +169,25 @@ async def handle_call_status(
     call = result.scalar_one_or_none()
     
     if call:
-        call.status = CallStatus.lower()
+        # Map Twilio status to internal CallStatus enum
+        status_map = {
+            "completed": CallStatus.COMPLETED.value,
+            "busy": CallStatus.NOT_ANSWERED.value,
+            "no-answer": CallStatus.NOT_ANSWERED.value,
+            "failed": CallStatus.NOT_ANSWERED.value,
+            "canceled": CallStatus.NOT_ANSWERED.value,
+        }
+        internal_status = status_map.get(CallStatus.lower(), CallStatus.INITIATED.value)
+        call.status = internal_status
         call.duration_seconds = int(CallDuration)
+        if internal_status == CallStatus.COMPLETED.value:
+            call.ended_at = datetime.utcnow()
         await db.flush()
-        
         # End call in orchestrator if completed
-        if CallStatus.lower() in ["completed", "failed", "no-answer", "busy"]:
+        if internal_status == CallStatus.COMPLETED.value:
             from app.services.call_orchestrator import call_orchestrator
             call_orchestrator.end_call(call.id)
-    
+
     return {"status": "received"}
 
 

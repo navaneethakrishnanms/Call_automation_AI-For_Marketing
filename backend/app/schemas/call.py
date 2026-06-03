@@ -26,10 +26,13 @@ class CallUpdate(BaseModel):
     status: Optional[str] = None
     transcript: Optional[str] = None
     language_detected: Optional[str] = None
+    intent: Optional[str] = None
     lead_score: Optional[float] = Field(None, ge=0, le=1)
     lead_qualification: Optional[str] = None
     duration_seconds: Optional[int] = None
     recording_url: Optional[str] = None
+    call_summary: Optional[str] = None
+    cost: Optional[float] = None
     ended_at: Optional[datetime] = None
 
 
@@ -42,10 +45,13 @@ class CallResponse(BaseModel):
     duration_seconds: int
     transcript: Optional[str] = None
     language_detected: Optional[str] = None
+    intent: Optional[str] = None
     lead_score: Optional[float] = None
     lead_qualification: Optional[str] = None
     status: str
     recording_url: Optional[str] = None
+    call_summary: Optional[str] = None
+    cost: Optional[float] = None
     started_at: datetime
     ended_at: Optional[datetime] = None
     

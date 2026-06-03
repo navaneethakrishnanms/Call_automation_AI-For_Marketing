@@ -23,6 +23,12 @@ async def create_retell_call(to_number: str, agent_id: str = None) -> dict:
     Returns:
         dict with call_id, agent_id, and status from Retell API
     """
+    # Ensure E.164 format, default to +91 (India) if no + is provided
+    if to_number and not to_number.startswith('+'):
+        # Just strip non-digits to be safe and prepend +91 if we assume it's a raw number
+        clean_num = ''.join(filter(str.isdigit, to_number))
+        to_number = f"+91{clean_num}"
+
     if not settings.retell_api_key:
         return {"status": "error", "message": "RETELL_API_KEY not configured in .env"}
     
@@ -70,4 +76,28 @@ async def create_retell_call(to_number: str, agent_id: str = None) -> dict:
         return {"status": "error", "message": "Retell API request timed out"}
     except Exception as e:
         logger.error(f"Retell call failed: {e}")
+        return {"status": "error", "message": str(e)}
+
+async def get_retell_call(call_id: str) -> dict:
+    """
+    Get call details and transcript from Retell AI.
+    """
+    if not settings.retell_api_key:
+        return {"status": "error", "message": "RETELL_API_KEY not configured"}
+
+    headers = {
+        "Authorization": f"Bearer {settings.retell_api_key}",
+    }
+    
+    url = f"https://api.retellai.com/v2/get-call/{call_id}"
+    
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(url, headers=headers)
+            
+        if response.status_code == 200:
+            return {"status": "success", "data": response.json()}
+        else:
+            return {"status": "error", "message": f"Retell API error: {response.text}"}
+    except Exception as e:
         return {"status": "error", "message": str(e)}

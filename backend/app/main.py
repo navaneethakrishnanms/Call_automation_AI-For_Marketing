@@ -10,7 +10,7 @@ from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.api.routes import campaigns, calls, leads, analytics, webhooks, test, voice_chat
+from app.api.routes import campaigns, calls, leads, analytics, webhooks, test, voice_chat, feedback
 
 # Configure logging
 logging.basicConfig(
@@ -68,6 +68,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+from app.api.routes import campaigns, calls, leads, analytics, webhooks, test, voice_chat, call_requests, feedback
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -85,6 +87,8 @@ app.include_router(leads.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
 app.include_router(webhooks.router, prefix="/api")
 app.include_router(voice_chat.router, prefix="/api")  # PRIMARY: Voice chatbot interface
+app.include_router(call_requests.router, prefix="/api")
+app.include_router(feedback.router, prefix="/api")
 
 
 @app.get("/")

@@ -110,38 +110,8 @@ router.post("/upload", upload.single("file"), async (req, res) => {
             updatedFileName = path.basename(updatedPath);
         }
 
-        // 5. Classify intent for each successful call (wait for calls to finish)
-        let intentResults = [];
-        const callsWithIds = successResults.filter((r) => r.call_id);
-
-        if (callsWithIds.length > 0) {
-            console.log(`\n🎯 Classifying intent for ${callsWithIds.length} calls...`);
-            const { classifyCallIntent } = require("../services/intentService");
-
-            intentResults = await Promise.all(
-                callsWithIds.map((r) =>
-                    classifyCallIntent(r.call_id, `+91${r.phone}`)
-                        .then((intent) => ({ name: r.name, phone: r.phone, call_id: r.call_id, ...intent }))
-                        .catch((err) => ({
-                            name: r.name, phone: r.phone, call_id: r.call_id,
-                            intent: "Needs Follow-up", confidence_score: 0,
-                            note: err.message,
-                        }))
-                )
-            );
-
-            console.log(`\n📊 Intent classification complete:`);
-            intentResults.forEach((r) => {
-                console.log(`   ${r.name} (${r.phone}): ${r.intent} (${r.confidence_score}%)`);
-            });
-
-            // Save intent results to Excel
-            const { saveIntentResults } = require("../utils/excelParser");
-            const saved = saveIntentResults(intentResults);
-            intentResults._savedFile = saved.fileName;
-        }
-
-        // 6. Return summary
+        // 5. Return summary — intent classification is now handled per-call by the frontend
+        //    (decoupled so the upload request doesn't block for minutes waiting for calls to end)
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
 
         return res.json({
@@ -159,7 +129,13 @@ router.post("/upload", upload.single("file"), async (req, res) => {
                     error: r.error,
                 })),
             },
-            intent_results: intentResults,
+            successful_calls: successResults
+                .filter((r) => r.call_id)
+                .map((r) => ({
+                    name: r.name,
+                    phone: r.phone,
+                    call_id: r.call_id,
+                })),
             intent_file: "/bulk-api/download-intent-csv",
             updated_file: updatedFileName
                 ? `/bulk-api/downloads/${updatedFileName}`

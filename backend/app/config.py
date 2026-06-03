@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     
     # Database
-    database_url: str = "sqlite+aiosqlite:///./marketing_ai.db"
+    database_url: str = "sqlite+aiosqlite:///./data/marketing_ai.db"
     
     # Twilio
     twilio_account_sid: str = ""

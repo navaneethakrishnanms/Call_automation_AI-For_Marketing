@@ -22,7 +22,7 @@ services:
       - CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://frontend:80
       - SECRET_KEY=${SECRET_KEY:-change-this-in-production}
     volumes:
-      - backend_data:/app/data
+      - ./backend/data:/app/data
       - ./backend/faqs:/app/faqs
     networks:
       - marketing-ai-network
@@ -53,6 +53,3 @@ networks:
   marketing-ai-network:
     driver: bridge
 
-volumes:
-  backend_data:
-    driver: local

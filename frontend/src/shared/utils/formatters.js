@@ -15,6 +15,11 @@ export function formatDuration(seconds) {
  * Format date to relative time
  */
 export function formatRelativeTime(dateString) {
+    if (!dateString) return '-'
+    // Append Z if it's a naive UTC timestamp from backend
+    if (!dateString.endsWith('Z') && !dateString.includes('+')) {
+        dateString += 'Z'
+    }
     const date = new Date(dateString)
     const now = new Date()
     const diffMs = now - date
@@ -35,6 +40,10 @@ export function formatRelativeTime(dateString) {
  */
 export function formatDate(dateString) {
     if (!dateString) return '-'
+    // Append Z if it's a naive UTC timestamp from backend
+    if (!dateString.endsWith('Z') && !dateString.includes('+')) {
+        dateString += 'Z'
+    }
     return new Date(dateString).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
@@ -130,4 +139,17 @@ export function truncateText(text, maxLength = 50) {
     if (!text) return ''
     if (text.length <= maxLength) return text
     return text.slice(0, maxLength) + '...'
+}
+
+/**
+ * Format Currency
+ */
+export function formatCurrency(value) {
+    if (value === null || value === undefined) return '-'
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 3
+    }).format(value)
 }

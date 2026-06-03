@@ -16,7 +16,7 @@ import {
     ChevronDown,
     ChevronRight
 } from 'lucide-react'
-import api, { bulkCallAPI } from '../api/client'
+import api, { bulkCallAPI } from '../../shared/services/client'
 
 function BulkCallPage() {
     const [file, setFile] = useState(null)
@@ -27,6 +27,8 @@ function BulkCallPage() {
     const [intentHistory, setIntentHistory] = useState([])
     const [historyLoading, setHistoryLoading] = useState(false)
     const [downloadUrl, setDownloadUrl] = useState(null)
+    const [intentResults, setIntentResults] = useState([])
+    const [intentProgress, setIntentProgress] = useState(null) // { done: N, total: M }
 
     // Load intent history on mount
     useEffect(() => {
@@ -70,12 +72,16 @@ function BulkCallPage() {
         setFile(f)
         setError(null)
         setResult(null)
+        setIntentResults([])
+        setIntentProgress(null)
     }
 
     const clearFile = () => {
         setFile(null)
         setResult(null)
         setError(null)
+        setIntentResults([])
+        setIntentProgress(null)
     }
 
     // ── Upload ───────────────────────────────────────────────────────────
@@ -84,6 +90,8 @@ function BulkCallPage() {
         setUploading(true)
         setError(null)
         setResult(null)
+        setIntentResults([])
+        setIntentProgress(null)
 
         const formData = new FormData()
         formData.append('file', file)
@@ -95,8 +103,36 @@ function BulkCallPage() {
                 baseURL: '/bulk-api',
             })
             setResult(response)
-            // Refresh history after new results
-            fetchIntentHistory()
+            setUploading(false)
+
+            // Now classify intent for each successful call individually
+            const calls = response.successful_calls || []
+            if (calls.length > 0) {
+                setIntentProgress({ done: 0, total: calls.length })
+                const results = []
+
+                for (const call of calls) {
+                    try {
+                        const intent = await bulkCallAPI.classifyIntent(
+                            call.call_id,
+                            call.phone,
+                            call.name
+                        )
+                        results.push({ name: call.name, phone: call.phone, call_id: call.call_id, ...intent })
+                    } catch (err) {
+                        results.push({
+                            name: call.name, phone: call.phone, call_id: call.call_id,
+                            intent: 'Needs Follow-up', confidence_score: 0,
+                            description: err.message || 'Classification failed',
+                        })
+                    }
+                    setIntentResults([...results])
+                    setIntentProgress({ done: results.length, total: calls.length })
+                }
+
+                // Refresh history after all intents are classified
+                fetchIntentHistory()
+            }
         } catch (err) {
             setError(
                 err.response?.data?.error ||
@@ -104,7 +140,6 @@ function BulkCallPage() {
                 err.message ||
                 'Something went wrong.'
             )
-        } finally {
             setUploading(false)
         }
     }
@@ -294,12 +329,38 @@ function BulkCallPage() {
                         </div>
                     )}
 
+                    {/* Intent Classification Progress */}
+                    {intentProgress && intentProgress.done < intentProgress.total && (
+                        <div className="glass-card p-6">
+                            <div className="flex items-center gap-4 mb-4">
+                                <Loader2 className="w-6 h-6 text-primary-400 animate-spin" />
+                                <p className="text-white font-medium">
+                                    Classifying intent… {intentProgress.done}/{intentProgress.total} calls
+                                </p>
+                            </div>
+                            <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-gradient-to-r from-primary-500 to-accent-500 rounded-full transition-all duration-500"
+                                    style={{ width: `${(intentProgress.done / intentProgress.total) * 100}%` }}
+                                />
+                            </div>
+                            <p className="text-white/40 text-sm mt-3">
+                                Waiting for calls to finish and analyzing transcripts. This may take several minutes per call.
+                            </p>
+                        </div>
+                    )}
+
                     {/* Intent Classification Results */}
-                    {result?.intent_results?.length > 0 && (
+                    {intentResults.length > 0 && (
                         <div className="glass-card overflow-hidden">
                             <div className="p-4 border-b border-white/10">
                                 <p className="text-white font-medium flex items-center gap-2">
-                                    🎯 Customer Intent Classification ({result.intent_results.length})
+                                    🎯 Customer Intent Classification ({intentResults.length})
+                                    {intentProgress && intentProgress.done < intentProgress.total && (
+                                        <span className="text-white/40 text-sm ml-2">
+                                            ({intentProgress.done}/{intentProgress.total} complete)
+                                        </span>
+                                    )}
                                 </p>
                             </div>
                             <div className="overflow-x-auto max-h-96 overflow-y-auto">
@@ -314,7 +375,7 @@ function BulkCallPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {result.intent_results.map((r, i) => (
+                                        {intentResults.map((r, i) => (
                                             <tr key={i} className="border-t border-white/5">
                                                 <td className="p-3 text-white/80">{r.name}</td>
                                                 <td className="p-3 text-white/60">{r.phone_number || r.phone}</td>
@@ -520,3 +581,4 @@ function StatCard({ label, value, icon, color, iconColor }) {
 }
 
 export default BulkCallPage
+

@@ -64,7 +64,7 @@ async function getCallTranscript(callId) {
                 }
             );
 
-            if (data.call_status === "ended" || data.call_status === "error") {
+            if (["ended", "error", "not_connected"].includes(data.call_status)) {
                 return {
                     transcript: data.transcript || "",
                     status: data.call_status,

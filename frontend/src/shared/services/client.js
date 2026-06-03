@@ -90,5 +90,10 @@ export const bulkCallAPI = {
     downloadCSVUrl: '/bulk-api/download-intent-csv',
 }
 
-export default api
+// Feedback APIs
+export const feedbackAPI = {
+    list: (params = {}) => api.get('/feedback', { params }),
+    create: (data) => api.post('/feedback', data),
+}
 
+export default api

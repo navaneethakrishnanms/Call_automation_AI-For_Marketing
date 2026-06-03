@@ -1,0 +1,56 @@
+[
+  {
+    "id": "1cbcf60d-32b1-4c13-8f97-7fc5f2657a96",
+    "name": "navaneeth",
+    "phone_number": "9361819486",
+    "preferred_time": "5 pm",
+    "message": "",
+    "status": "done",
+    "created_at": "2026-06-03T13:15:50.637124"
+  },
+  {
+    "id": "10c2e18a-970a-4b32-8c7e-87cda5b91912",
+    "name": "JHANANISHRI",
+    "phone_number": "9790594417",
+    "preferred_time": "10 PM",
+    "message": "",
+    "status": "done",
+    "created_at": "2026-06-02T21:47:04.529228"
+  },
+  {
+    "id": "7b3988e1-0870-496c-a222-0483318b3e50",
+    "name": "AKALYA S",
+    "phone_number": "7904480971",
+    "preferred_time": "10.45 AM",
+    "message": "",
+    "status": "done",
+    "created_at": "2026-06-02T10:42:08.874742"
+  },
+  {
+    "id": "b4b2460e-fb77-4341-aca8-d214e25c565e",
+    "name": "AKALYA",
+    "phone_number": "7904480971",
+    "preferred_time": "9 AM",
+    "message": "JUST WANT TO EXPLORE",
+    "status": "done",
+    "created_at": "2026-06-02T08:54:54.930936"
+  },
+  {
+    "id": "52115511-09d0-49d7-9258-2247e6401ad5",
+    "name": "midhuna",
+    "phone_number": "7904480971",
+    "preferred_time": "3.15 pm",
+    "message": "",
+    "status": "done",
+    "created_at": "2026-05-28T15:13:22.231137"
+  },
+  {
+    "id": "b44cd521-246a-4be7-a0b4-11fcdbfdffa2",
+    "name": "sri",
+    "phone_number": "919360275150",
+    "preferred_time": "2.30PM today",
+    "message": "about the facilities in the college",
+    "status": "done",
+    "created_at": "2026-04-29T15:45:11.440980"
+  }
+]

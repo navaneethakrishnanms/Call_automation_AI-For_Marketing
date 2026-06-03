@@ -12,8 +12,8 @@ import {
     Check,
     Upload
 } from 'lucide-react'
-import { campaignsAPI } from '../api/client'
-import { formatDate, formatNumber } from '../utils/formatters'
+import { campaignsAPI } from '../../shared/services/client'
+import { formatDate, formatNumber } from '../../shared/utils/formatters'
 
 function CampaignsPage() {
     const [campaigns, setCampaigns] = useState([])
@@ -396,3 +396,4 @@ function CampaignModal({ campaign, onClose, onSave }) {
 }
 
 export default CampaignsPage
+

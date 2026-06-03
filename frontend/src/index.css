@@ -11,65 +11,96 @@
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+  background: linear-gradient(-45deg, #0f172a, #1e1b4b, #0f172a, #312e81);
+  background-size: 400% 400%;
+  animation: gradientBG 15s ease infinite;
   min-height: 100vh;
   color: #f1f5f9;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+@keyframes gradientBG {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
 /* Glassmorphism card styles */
 @layer components {
   .glass-card {
-    @apply bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl;
+    @apply bg-white/5 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.37)];
   }
 
   .glass-card-hover {
-    @apply transition-all duration-300 hover:bg-white/10 hover:border-white/20 hover:shadow-primary-500/20 hover:shadow-xl;
+    @apply transition-all duration-500 hover:-translate-y-1 hover:bg-indigo-900/40 hover:border-primary-400/40 hover:shadow-primary-500/40 hover:shadow-[0_0_40px_-10px_rgba(14,165,233,0.5)] relative overflow-hidden;
+  }
+
+  .glass-card-hover::after {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-tr from-primary-500/0 via-primary-500/20 to-accent-500/20 opacity-0 transition-opacity duration-500 pointer-events-none;
+  }
+
+  .glass-card-hover:hover::after {
+    @apply opacity-100;
   }
 
   .gradient-text {
-    @apply bg-gradient-to-r from-primary-400 via-accent-400 to-primary-400 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-primary-300 via-accent-300 to-primary-300 bg-clip-text text-transparent bg-[length:200%_auto];
+    animation: gradientX 3s ease infinite;
   }
 
   .btn-primary {
-    @apply px-6 py-3 bg-gradient-to-r from-primary-500 to-accent-500 rounded-xl font-semibold text-white shadow-lg shadow-primary-500/30 transition-all duration-300 hover:shadow-xl hover:shadow-primary-500/40 hover:scale-105 active:scale-100;
+    @apply px-6 py-3 bg-gradient-to-r from-primary-500 to-accent-500 rounded-xl font-semibold text-white shadow-lg shadow-primary-500/30 transition-all duration-300 hover:shadow-xl hover:shadow-accent-500/50 hover:-translate-y-0.5 hover:scale-[1.02] active:scale-95 relative overflow-hidden;
+  }
+
+  .btn-primary::before {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 -translate-x-full transition-transform duration-500;
+  }
+
+  .btn-primary:hover::before {
+    @apply translate-x-full;
   }
 
   .btn-secondary {
-    @apply px-6 py-3 bg-white/10 border border-white/20 rounded-xl font-semibold text-white transition-all duration-300 hover:bg-white/20 hover:border-white/30;
+    @apply px-6 py-3 bg-white/5 border border-white/20 rounded-xl font-semibold text-white transition-all duration-300 hover:bg-white/10 hover:border-white/40 hover:-translate-y-0.5 active:scale-95 shadow-lg shadow-transparent hover:shadow-white/10;
   }
 
   .btn-icon {
-    @apply p-2 rounded-lg bg-white/5 border border-white/10 text-white/70 transition-all duration-200 hover:bg-white/10 hover:text-white hover:border-white/20;
+    @apply p-2 rounded-xl bg-white/5 border border-white/10 text-white/70 transition-all duration-300 hover:bg-white/15 hover:text-white hover:border-white/30 hover:shadow-lg hover:shadow-white/5 active:scale-95;
   }
 
   .input-field {
-    @apply w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all duration-200;
+    @apply w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-400/30 focus:bg-white/10 transition-all duration-300 shadow-inner;
+  }
+
+  select option {
+    @apply bg-slate-900 text-white;
   }
 
   .badge {
-    @apply px-3 py-1 rounded-full text-xs font-semibold;
+    @apply px-3 py-1 rounded-full text-xs font-semibold tracking-wide shadow-sm;
   }
 
   .badge-hot {
-    @apply bg-rose-500/20 text-rose-400 border border-rose-500/30;
+    @apply bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-rose-500/20;
   }
 
   .badge-warm {
-    @apply bg-amber-500/20 text-amber-400 border border-amber-500/30;
+    @apply bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-amber-500/20;
   }
 
   .badge-cold {
-    @apply bg-sky-500/20 text-sky-400 border border-sky-500/30;
+    @apply bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sky-500/20;
   }
 
   .badge-active {
-    @apply bg-emerald-500/20 text-emerald-400 border border-emerald-500/30;
+    @apply bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-emerald-500/20;
   }
 
   .badge-inactive {
-    @apply bg-slate-500/20 text-slate-400 border border-slate-500/30;
+    @apply bg-slate-500/20 text-slate-300 border border-slate-500/40 shadow-slate-500/20;
   }
 
   .stat-card {
@@ -78,19 +109,23 @@ body {
 
   .stat-card::before {
     content: '';
-    @apply absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none;
+    @apply absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none opacity-50 transition-opacity duration-500;
+  }
+
+  .stat-card:hover::before {
+    @apply opacity-100;
   }
 
   .table-row {
-    @apply border-b border-white/5 hover:bg-white/5 transition-colors duration-200;
+    @apply border-b border-white/5 hover:bg-white/10 transition-colors duration-300 cursor-default;
   }
 
   .sidebar-link {
-    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-white/60 transition-all duration-200 hover:bg-white/10 hover:text-white;
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-white/60 transition-all duration-300 hover:bg-white/10 hover:text-white hover:translate-x-1;
   }
 
   .sidebar-link-active {
-    @apply bg-gradient-to-r from-primary-500/20 to-accent-500/20 text-white border border-primary-500/30;
+    @apply bg-gradient-to-r from-primary-500/20 to-accent-500/20 text-white border border-primary-500/30 shadow-lg shadow-primary-500/10 translate-x-1;
   }
 }
 
@@ -101,12 +136,12 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(15, 23, 42, 0.5);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 4px;
 }
 
@@ -127,9 +162,11 @@ body {
 /* Chart customization */
 .recharts-cartesian-grid-horizontal line,
 .recharts-cartesian-grid-vertical line {
-  stroke: rgba(255, 255, 255, 0.1);
+  stroke: rgba(255, 255, 255, 0.05);
 }
 
 .recharts-text {
-  fill: rgba(255, 255, 255, 0.6);
+  fill: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
 }
+

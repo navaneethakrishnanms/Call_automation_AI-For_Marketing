@@ -2,5 +2,6 @@
 from app.models.campaign import Campaign
 from app.models.call import Call
 from app.models.lead import Lead
+from app.models.feedback import Feedback
 
-__all__ = ["Campaign", "Call", "Lead"]
+__all__ = ["Campaign", "Call", "Lead", "Feedback"]

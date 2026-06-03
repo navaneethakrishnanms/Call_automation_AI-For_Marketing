@@ -11,8 +11,8 @@ import {
     X,
     MessageSquare
 } from 'lucide-react'
-import { callsAPI, campaignsAPI } from '../api/client'
-import { formatDuration, formatDate, formatPhoneNumber, getQualificationBadge, getStatusBadge, getLanguageDisplay } from '../utils/formatters'
+import { callsAPI, campaignsAPI } from '../../shared/services/client'
+import { formatDuration, formatDate, formatPhoneNumber, getQualificationBadge, getStatusBadge, getLanguageDisplay, formatCurrency } from '../../shared/utils/formatters'
 
 function CallsPage() {
     const [calls, setCalls] = useState([])
@@ -47,10 +47,17 @@ function CallsPage() {
     async function fetchCalls() {
         try {
             setLoading(true)
+            const { status, ...restFilters } = filters;
+            const queryFilters = Object.fromEntries(
+                Object.entries(restFilters).filter(([_, v]) => v)
+            );
+            if (status) {
+                queryFilters.status_filter = status;
+            }
             const params = {
                 page,
                 page_size: 15,
-                ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v))
+                ...queryFilters,
             }
             const data = await callsAPI.list(params)
             setCalls(data.items || [])
@@ -59,6 +66,16 @@ function CallsPage() {
             console.error('Failed to fetch calls:', error)
         } finally {
             setLoading(false)
+        }
+    }
+
+    async function handleViewDetails(call) {
+        try {
+            const data = await callsAPI.get(call.id)
+            setSelectedCall(data)
+        } catch (error) {
+            console.error('Failed to fetch call details:', error)
+            setSelectedCall(call)
         }
     }
 
@@ -94,9 +111,7 @@ function CallsPage() {
                         >
                             <option value="">All Status</option>
                             <option value="completed">Completed</option>
-                            <option value="in_progress">In Progress</option>
-                            <option value="failed">Failed</option>
-                            <option value="no_answer">No Answer</option>
+                            <option value="not_answered">Not Answered</option>
                         </select>
                     </div>
                     <div className="min-w-[150px]">
@@ -131,7 +146,7 @@ function CallsPage() {
                                         <th className="p-4 font-medium">Campaign</th>
                                         <th className="p-4 font-medium">Duration</th>
                                         <th className="p-4 font-medium">Language</th>
-                                        <th className="p-4 font-medium">Lead</th>
+                                        <th className="p-4 font-medium">Cost</th>
                                         <th className="p-4 font-medium">Status</th>
                                         <th className="p-4 font-medium">Date</th>
                                         <th className="p-4 font-medium">Actions</th>
@@ -140,7 +155,7 @@ function CallsPage() {
                                 <tbody>
                                     {calls.length === 0 ? (
                                         <tr>
-                                            <td colSpan={8} className="p-8 text-center text-white/50">
+                                            <td colSpan={7} className="p-8 text-center text-white/50">
                                                 No calls found
                                             </td>
                                         </tr>
@@ -169,8 +184,8 @@ function CallsPage() {
                                                     </div>
                                                 </td>
                                                 <td className="p-4">
-                                                    <span className={getQualificationBadge(call.lead_qualification)}>
-                                                        {call.lead_qualification || 'N/A'}
+                                                    <span className="text-white/70 font-mono">
+                                                        {formatCurrency(call.cost)}
                                                     </span>
                                                 </td>
                                                 <td className="p-4">
@@ -183,7 +198,7 @@ function CallsPage() {
                                                 </td>
                                                 <td className="p-4">
                                                     <button
-                                                        onClick={() => setSelectedCall(call)}
+                                                        onClick={() => handleViewDetails(call)}
                                                         className="btn-icon"
                                                         title="View Details"
                                                     >
@@ -267,18 +282,36 @@ function CallDetailModal({ call, campaign, onClose }) {
                             <p className="text-white font-medium">{getLanguageDisplay(call.language_detected)}</p>
                         </div>
                         <div>
-                            <p className="text-sm text-white/50">Lead Qualification</p>
-                            <span className={getQualificationBadge(call.lead_qualification)}>
-                                {call.lead_qualification || 'N/A'}
-                            </span>
+                            <p className="text-sm text-white/50">Cost</p>
+                            <p className="text-white font-medium font-mono">{formatCurrency(call.cost)}</p>
                         </div>
                         <div>
-                            <p className="text-sm text-white/50">Lead Score</p>
-                            <p className="text-white font-medium">
-                                {call.lead_score ? `${(call.lead_score * 100).toFixed(0)}%` : 'N/A'}
-                            </p>
+                            <p className="text-sm text-white/50">Started At</p>
+                            <p className="text-white font-medium">{formatDate(call.started_at)}</p>
                         </div>
                     </div>
+
+                    {/* Summary */}
+                    {call.call_summary && (
+                        <div>
+                            <p className="text-sm text-white/50 mb-2">Summary</p>
+                            <div className="p-4 bg-white/5 rounded-lg">
+                                <p className="text-white/80 text-sm font-sans leading-relaxed">
+                                    {call.call_summary}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Audio Player */}
+                    {call.recording_url && (
+                        <div>
+                            <p className="text-sm text-white/50 mb-2">Recording</p>
+                            <div className="bg-white/5 p-4 rounded-lg flex items-center justify-center">
+                                <audio src={call.recording_url} controls className="w-full h-12" />
+                            </div>
+                        </div>
+                    )}
 
                     {/* Transcript */}
                     <div>
@@ -293,18 +326,6 @@ function CallDetailModal({ call, campaign, onClose }) {
                             )}
                         </div>
                     </div>
-
-                    {/* Timestamps */}
-                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/10">
-                        <div>
-                            <p className="text-sm text-white/50">Started At</p>
-                            <p className="text-white/70 text-sm">{formatDate(call.started_at)}</p>
-                        </div>
-                        <div>
-                            <p className="text-sm text-white/50">Ended At</p>
-                            <p className="text-white/70 text-sm">{call.ended_at ? formatDate(call.ended_at) : '-'}</p>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -312,3 +333,4 @@ function CallDetailModal({ call, campaign, onClose }) {
 }
 
 export default CallsPage
+

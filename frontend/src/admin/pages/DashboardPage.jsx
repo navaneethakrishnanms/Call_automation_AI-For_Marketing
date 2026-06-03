@@ -8,7 +8,9 @@ import {
     ArrowDownRight,
     Flame,
     Thermometer,
-    Snowflake
+
+    Snowflake,
+    Globe
 } from 'lucide-react'
 import {
     LineChart,
@@ -22,10 +24,11 @@ import {
     Pie,
     Cell
 } from 'recharts'
-import { analyticsAPI, callsAPI } from '../api/client'
-import { formatDuration, formatRelativeTime, formatPercentage } from '../utils/formatters'
+import { analyticsAPI, callsAPI } from '../../shared/services/client'
+import { formatDuration, formatRelativeTime, formatPercentage } from '../../shared/utils/formatters'
 
 const COLORS = ['#ef4444', '#f59e0b', '#3b82f6']
+const CHART_COLORS = ['#0ea5e9', '#d946ef', '#22c55e', '#f59e0b']
 
 function StatCard({ title, value, subtitle, icon: Icon, trend, trendUp }) {
     return (
@@ -55,20 +58,23 @@ function StatCard({ title, value, subtitle, icon: Icon, trend, trendUp }) {
 function DashboardPage() {
     const [stats, setStats] = useState(null)
     const [callMetrics, setCallMetrics] = useState([])
-    const [recentCalls, setRecentCalls] = useState([])
+
+    const [languageData, setLanguageData] = useState([])
+    const [dateRange, setDateRange] = useState(7)
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
         async function fetchData() {
             try {
-                const [overviewData, callsData, recentCallsData] = await Promise.all([
+                setLoading(true)
+                const [overviewData, callsData, langData] = await Promise.all([
                     analyticsAPI.overview(),
-                    analyticsAPI.calls(7),
-                    callsAPI.list({ page: 1, page_size: 5 })
+                    analyticsAPI.calls(dateRange),
+                    analyticsAPI.languages()
                 ])
                 setStats(overviewData)
                 setCallMetrics(callsData)
-                setRecentCalls(recentCallsData.items || [])
+                setLanguageData(langData || [])
             } catch (error) {
                 console.error('Failed to fetch dashboard data:', error)
             } finally {
@@ -76,7 +82,7 @@ function DashboardPage() {
             }
         }
         fetchData()
-    }, [])
+    }, [dateRange])
 
     const leadPieData = stats ? [
         { name: 'Hot', value: stats.hot_leads, color: '#ef4444' },
@@ -95,7 +101,7 @@ function DashboardPage() {
     return (
         <div className="space-y-6">
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-slide-up" style={{ animationDelay: '100ms' }}>
                 <StatCard
                     title="Total Calls"
                     value={stats?.total_calls || 0}
@@ -113,14 +119,6 @@ function DashboardPage() {
                     trendUp={true}
                 />
                 <StatCard
-                    title="Conversion Rate"
-                    value={formatPercentage(stats?.conversion_rate || 0)}
-                    subtitle="Hot leads / Total calls"
-                    icon={TrendingUp}
-                    trend={5}
-                    trendUp={true}
-                />
-                <StatCard
                     title="Avg. Duration"
                     value={formatDuration(stats?.avg_call_duration || 0)}
                     subtitle="Per call"
@@ -129,10 +127,24 @@ function DashboardPage() {
             </div>
 
             {/* Charts Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="flex justify-end animate-slide-up" style={{ animationDelay: '150ms' }}>
+                <select
+                    value={dateRange}
+                    onChange={(e) => setDateRange(Number(e.target.value))}
+                    className="input-field max-w-[200px]"
+                >
+                    <option value={7}>Last 7 Days</option>
+                    <option value={15}>Last 15 Days</option>
+                    <option value={30}>Last 30 Days</option>
+                    <option value={90}>All Days</option>
+                </select>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-slide-up" style={{ animationDelay: '200ms', opacity: 0, animationFillMode: 'forwards' }}>
                 {/* Call Volume Chart */}
                 <div className="lg:col-span-2 glass-card p-6">
-                    <h3 className="text-lg font-semibold text-white mb-4">Call Volume (Last 7 Days)</h3>
+                    <h3 className="text-lg font-semibold text-white mb-4">
+                        Call Volume ({dateRange === 90 ? 'All Days' : `Last ${dateRange} Days`})
+                    </h3>
                     <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={callMetrics}>
@@ -149,6 +161,7 @@ function DashboardPage() {
                                         border: '1px solid rgba(255,255,255,0.1)',
                                         borderRadius: '8px'
                                     }}
+                                    itemStyle={{ color: '#fff' }}
                                 />
                                 <Line
                                     type="monotone"
@@ -195,6 +208,7 @@ function DashboardPage() {
                                         border: '1px solid rgba(255,255,255,0.1)',
                                         borderRadius: '8px'
                                     }}
+                                    itemStyle={{ color: '#fff' }}
                                 />
                             </PieChart>
                         </ResponsiveContainer>
@@ -217,59 +231,100 @@ function DashboardPage() {
                 </div>
             </div>
 
-            {/* Recent Calls */}
-            <div className="glass-card p-6">
-                <h3 className="text-lg font-semibold text-white mb-4">Recent Calls</h3>
-                <div className="overflow-x-auto">
-                    <table className="w-full">
-                        <thead>
-                            <tr className="text-left text-white/50 text-sm border-b border-white/10">
-                                <th className="pb-3 font-medium">Phone</th>
-                                <th className="pb-3 font-medium">Duration</th>
-                                <th className="pb-3 font-medium">Language</th>
-                                <th className="pb-3 font-medium">Lead Score</th>
-                                <th className="pb-3 font-medium">Status</th>
-                                <th className="pb-3 font-medium">Time</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {recentCalls.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className="py-8 text-center text-white/50">
-                                        No calls yet. Start a campaign to see data here.
-                                    </td>
-                                </tr>
-                            ) : (
-                                recentCalls.map((call) => (
-                                    <tr key={call.id} className="table-row">
-                                        <td className="py-3 text-white">{call.phone_number}</td>
-                                        <td className="py-3 text-white/70">{formatDuration(call.duration_seconds)}</td>
-                                        <td className="py-3">
-                                            <span className="badge badge-active">{call.language_detected || 'Unknown'}</span>
-                                        </td>
-                                        <td className="py-3">
-                                            <span className={`badge ${call.lead_qualification === 'hot' ? 'badge-hot' :
-                                                    call.lead_qualification === 'warm' ? 'badge-warm' : 'badge-cold'
-                                                }`}>
-                                                {call.lead_qualification || 'N/A'}
-                                            </span>
-                                        </td>
-                                        <td className="py-3">
-                                            <span className={`badge ${call.status === 'completed' ? 'badge-active' : 'badge-inactive'
-                                                }`}>
-                                                {call.status}
-                                            </span>
-                                        </td>
-                                        <td className="py-3 text-white/50">{formatRelativeTime(call.started_at)}</td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+            {/* Charts Row 2 */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-slide-up" style={{ animationDelay: '250ms', opacity: 0, animationFillMode: 'forwards' }}>
+                {/* Language Distribution */}
+                <div className="glass-card p-6">
+                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                        <Globe className="w-5 h-5 text-primary-400" />
+                        Language Distribution
+                    </h3>
+                    <div className="h-48">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={languageData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={40}
+                                    outerRadius={70}
+                                    paddingAngle={5}
+                                    dataKey="count"
+                                    nameKey="language"
+                                >
+                                    {languageData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip
+                                    contentStyle={{
+                                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                                        border: '1px solid rgba(255,255,255,0.1)',
+                                        borderRadius: '8px'
+                                    }}
+                                    itemStyle={{ color: '#fff' }}
+                                />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
+                    <div className="space-y-2 mt-4">
+                        {languageData.map((lang, index) => (
+                            <div key={lang.language} className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <div
+                                        className="w-3 h-3 rounded-full"
+                                        style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+                                    />
+                                    <span className="text-white/70 capitalize">{lang.language}</span>
+                                </div>
+                                <span className="text-white/50">{(lang.percentage || 0).toFixed(1)}%</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Call Duration Distribution */}
+                <div className="lg:col-span-2 glass-card p-6">
+                    <h3 className="text-lg font-semibold text-white mb-4">Average Call Duration Trend</h3>
+                    <div className="h-48">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={callMetrics}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                                <XAxis
+                                    dataKey="date"
+                                    stroke="rgba(255,255,255,0.5)"
+                                    tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric'
+                                    })}
+                                />
+                                <YAxis stroke="rgba(255,255,255,0.5)" />
+                                <Tooltip
+                                    contentStyle={{
+                                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                                        border: '1px solid rgba(255,255,255,0.1)',
+                                        borderRadius: '8px'
+                                    }}
+                                    itemStyle={{ color: '#fff' }}
+                                    formatter={(value) => [`${value}s`, 'Avg Duration']}
+                                />
+                                <Line
+                                    type="monotone"
+                                    dataKey="avg_duration"
+                                    stroke="#d946ef"
+                                    strokeWidth={2}
+                                    dot={{ fill: '#d946ef', strokeWidth: 2 }}
+                                />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
                 </div>
             </div>
+
+
         </div>
     )
 }
 
 export default DashboardPage
+

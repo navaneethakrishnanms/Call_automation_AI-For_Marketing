@@ -15,12 +15,8 @@ from app.database import Base
 class CallStatus(str, enum.Enum):
     """Call status enumeration."""
     INITIATED = "initiated"
-    RINGING = "ringing"
-    IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
-    FAILED = "failed"
-    NO_ANSWER = "no_answer"
-    BUSY = "busy"
+    NOT_ANSWERED = "not_answered"
 
 
 class Call(Base):
@@ -51,12 +47,18 @@ class Call(Base):
         default="english"
     )
     
-    # Lead qualification
+    # Customer intent (e.g., placement, hostel, just exploring)
+    intent: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    
+    # Lead qualification (kept for backward compat)
     lead_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     lead_qualification: Mapped[Optional[str]] = mapped_column(
         String(20),
         nullable=True
-    )  # hot, warm, cold
+    )
+    
+    # Cost
+    cost: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     
     # Status
     status: Mapped[str] = mapped_column(
@@ -66,6 +68,9 @@ class Call(Base):
     
     # Recording URL (if available)
     recording_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Call summary
+    call_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     # Timestamps
     started_at: Mapped[datetime] = mapped_column(
